@@ -217,3 +217,11 @@ __marimo__/
 # Streamlit
 .streamlit/secrets.toml
 data/orders.csv
+
+# Project runtime output
+runs/
+.superpowers/
+
+# LaTeX build artifacts
+proposal/*.aux
+proposal/*.out
