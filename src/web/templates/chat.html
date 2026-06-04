@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CFA Optimization Agent</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="app">
+        <div class="main-panel">
+            <div class="header">
+                <h1>> cfa-optimization-agent</h1>
+            </div>
+
+            <div class="upload-area" id="uploadArea">
+                <p>Drop a CSV file here or click to upload</p>
+                <input type="file" id="fileInput" accept=".csv" hidden>
+                <div class="filename" id="uploadFilename"></div>
+            </div>
+
+            <div class="chat-container" id="chatContainer"></div>
+
+            <div class="chat-input-area">
+                <textarea
+                    id="chatInput"
+                    placeholder="Describe your optimization problem..."
+                    rows="1"
+                    disabled
+                ></textarea>
+                <button id="sendBtn" disabled>Send</button>
+            </div>
+        </div>
+
+        <div class="sidebar">
+            <h2>Status</h2>
+
+            <div class="status-item" id="uploadStatus" style="display:none">
+                <div class="label">Uploaded File</div>
+                <div class="value" id="uploadStatusFile">—</div>
+            </div>
+
+            <h2>Pipeline</h2>
+            <div class="pipeline-steps">
+                <div class="pipeline-step" id="stepUpload">
+                    <div class="dot"></div>
+                    <span>Upload CSV</span>
+                </div>
+                <div class="pipeline-step" id="stepIntake">
+                    <div class="dot"></div>
+                    <span>Problem Formulation</span>
+                </div>
+                <div class="pipeline-step" id="stepCleaning">
+                    <div class="dot"></div>
+                    <span>Data Cleaning</span>
+                </div>
+                <div class="pipeline-step" id="stepDone">
+                    <div class="dot"></div>
+                    <span>Complete</span>
+                </div>
+            </div>
+
+            <a class="btn-results" id="btnResults" href="#">View Results →</a>
+        </div>
+    </div>
+
+    <script src="/static/chat.js"></script>
+</body>
+</html>
