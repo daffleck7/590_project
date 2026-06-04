@@ -4,6 +4,7 @@ Uses the Claude Agent SDK with sandboxed code execution.
 """
 
 import json
+from collections.abc import Callable, Awaitable
 from pathlib import Path
 
 import anyio
@@ -94,10 +95,22 @@ def _build_data_manifest(csv_path: Path) -> dict:
     }
 
 
+async def _default_callback(event: dict) -> None:
+    """Default callback that prints to stdout (CLI behavior)."""
+    if event["type"] == "message":
+        print(f"\nCleaning Agent: {event['text']}")
+    elif event["type"] == "tool_call":
+        print(f"\n  [calling {event['tool']}]")
+    elif event["type"] == "tool_result":
+        preview = event["result"][:200] if len(event["result"]) > 200 else event["result"]
+        print(f"  [result: {preview}]")
+
+
 async def run_cleaning_agent(
     csv_path: str,
     config: ProblemConfig,
     output_dir: str,
+    callback: Callable[[dict], Awaitable[None]] | None = None,
 ) -> tuple[str | None, dict | None, list[dict]]:
     """Run the data cleaning agent.
 
@@ -112,6 +125,9 @@ async def run_cleaning_agent(
     output_path = Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
     usage_log = []
+
+    if callback is None:
+        callback = _default_callback
 
     mcp_server = _build_mcp_server(csv_path, output_dir)
 
@@ -158,7 +174,14 @@ async def run_cleaning_agent(
                     usage_log.append(message.usage)
                 for block in message.content:
                     if isinstance(block, TextBlock):
-                        print(f"\nCleaning Agent: {block.text}")
+                        await callback({"type": "message", "agent": "data_cleaning", "text": block.text})
+                    elif hasattr(block, "name"):
+                        await callback({
+                            "type": "tool_call",
+                            "agent": "data_cleaning",
+                            "tool": getattr(block, "name", "unknown"),
+                            "args": getattr(block, "input", {}),
+                        })
 
     # Find the cleaned output
     cleaned_csv = output_path / "cleaned_data.csv"

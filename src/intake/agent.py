@@ -5,6 +5,7 @@ Uses the Claude Agent SDK to run a conversation with data inspection tools.
 
 import json
 import re
+from collections.abc import Callable, Awaitable
 
 import anyio
 from claude_agent_sdk import (
@@ -68,9 +69,21 @@ def _extract_json_from_text(text: str) -> str | None:
     return None
 
 
+async def _default_callback(event: dict) -> None:
+    """Default callback that prints to stdout (CLI behavior)."""
+    if event["type"] == "message":
+        print(f"\nAgent: {event['text']}")
+    elif event["type"] == "tool_call":
+        print(f"\n  [calling {event['tool']}]")
+    elif event["type"] == "tool_result":
+        preview = event["result"][:200] if len(event["result"]) > 200 else event["result"]
+        print(f"  [result: {preview}]")
+
+
 async def run_intake_agent(
     csv_path: str,
     initial_description: str = "",
+    callback: Callable[[dict], Awaitable[None]] | None = None,
 ) -> tuple[ProblemConfig | None, list[dict]]:
     """Run the intake agent conversation and return a ProblemConfig.
 
@@ -81,6 +94,9 @@ async def run_intake_agent(
     Returns:
         Tuple of (ProblemConfig or None if failed, list of usage dicts).
     """
+    if callback is None:
+        callback = _default_callback
+
     mcp_server = _build_mcp_server()
     usage_log = []
 
@@ -140,14 +156,25 @@ async def run_intake_agent(
 
                 for block in message.content:
                     if isinstance(block, TextBlock):
-                        print(f"\nAgent: {block.text}")
+                        await callback({"type": "message", "agent": "intake", "text": block.text})
 
                         json_str = _extract_json_from_text(block.text)
                         if json_str:
                             try:
                                 config = ProblemConfig.model_validate_json(json_str)
+                                await callback({
+                                    "type": "config_ready",
+                                    "config": json.loads(config.model_dump_json()),
+                                })
                             except Exception:
                                 pass
+                    elif hasattr(block, "name"):
+                        await callback({
+                            "type": "tool_call",
+                            "agent": "intake",
+                            "tool": getattr(block, "name", "unknown"),
+                            "args": getattr(block, "input", {}),
+                        })
 
             elif isinstance(message, ResultMessage):
                 if message.result:
@@ -171,12 +198,23 @@ async def run_intake_agent(
                         usage_log.append(message.usage)
                     for block in message.content:
                         if isinstance(block, TextBlock):
-                            print(f"\nAgent: {block.text}")
+                            await callback({"type": "message", "agent": "intake", "text": block.text})
                             json_str = _extract_json_from_text(block.text)
                             if json_str:
                                 try:
                                     config = ProblemConfig.model_validate_json(json_str)
+                                    await callback({
+                                        "type": "config_ready",
+                                        "config": json.loads(config.model_dump_json()),
+                                    })
                                 except Exception:
                                     pass
+                        elif hasattr(block, "name"):
+                            await callback({
+                                "type": "tool_call",
+                                "agent": "intake",
+                                "tool": getattr(block, "name", "unknown"),
+                                "args": getattr(block, "input", {}),
+                            })
 
     return config, usage_log

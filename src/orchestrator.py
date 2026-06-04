@@ -5,6 +5,7 @@ Manages run directories, trace logging, and the handoff between agents.
 
 import json
 import time
+from collections.abc import Callable, Awaitable
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -48,16 +49,31 @@ class Orchestrator:
     data cleaning agent -> cleaned data + manifest.
     """
 
-    def __init__(self, csv_path: str, base_dir: str = "runs") -> None:
+    def __init__(
+        self,
+        csv_path: str,
+        base_dir: str = "runs",
+        callback: Callable[[dict], Awaitable[None]] | None = None,
+    ) -> None:
         """Initialize the orchestrator.
 
         Args:
             csv_path: Path to the raw CSV file.
             base_dir: Parent directory for run outputs.
+            callback: Optional async callback for event routing.
         """
         self.csv_path = csv_path
         self.run_dir = create_run_directory(base_dir)
         self.trace: dict = {"steps": [], "run_dir": self.run_dir}
+        self.callback = callback
+        self.activity_log: list[dict] = []
+
+    async def _log_event(self, event: dict) -> None:
+        """Log an event and forward to callback."""
+        event["timestamp"] = datetime.now(timezone.utc).isoformat()
+        self.activity_log.append(event)
+        if self.callback:
+            await self.callback(event)
 
     async def run_intake(
         self, description: str = ""
@@ -75,7 +91,9 @@ class Orchestrator:
         print(f"{'='*60}")
 
         start = time.time()
-        config, usage_log = await run_intake_agent(self.csv_path, description)
+        config, usage_log = await run_intake_agent(
+            self.csv_path, description, callback=self._log_event
+        )
         duration = time.time() - start
 
         self.trace["steps"].append({
@@ -108,9 +126,11 @@ class Orchestrator:
         print("DATA CLEANING AGENT")
         print(f"{'='*60}")
 
+        await self._log_event({"type": "cleaning_start"})
+
         start = time.time()
         cleaned_path, manifest, usage_log = await run_cleaning_agent(
-            self.csv_path, config, self.run_dir
+            self.csv_path, config, self.run_dir, callback=self._log_event
         )
         duration = time.time() - start
 
@@ -120,6 +140,12 @@ class Orchestrator:
             "duration_s": round(duration, 2),
             "usage": usage_log,
             "success": cleaned_path is not None,
+        })
+
+        await self._log_event({
+            "type": "cleaning_done",
+            "cleaned_path": cleaned_path,
+            "manifest": manifest,
         })
 
         return cleaned_path, manifest
@@ -132,12 +158,15 @@ class Orchestrator:
         """
         config = await self.run_intake(description)
         if config is None:
+            await self._log_event({"type": "error", "message": "Failed to produce ProblemConfig"})
             print("\nFailed to produce a valid ProblemConfig. Aborting.")
+            self.trace["activity_log"] = self.activity_log
             save_trace(self.run_dir, self.trace)
             return
 
         cleaned_path, manifest = await self.run_cleaning(config)
 
+        self.trace["activity_log"] = self.activity_log
         save_trace(self.run_dir, self.trace)
 
         print(f"\n{'='*60}")
@@ -166,6 +195,7 @@ class Orchestrator:
 
         cleaned_path, manifest = await self.run_cleaning(config)
 
+        self.trace["activity_log"] = self.activity_log
         save_trace(self.run_dir, self.trace)
 
         print(f"\n{'='*60}")
