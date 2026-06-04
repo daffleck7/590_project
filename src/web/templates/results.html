@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Results — CFA Optimization Agent</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="results-page">
+        <h1>> run/{{ run_id }} — results</h1>
+
+        <div class="results-section" id="configSection">
+            <div class="section-header" onclick="toggleSection('configSection')">
+                <h2>ProblemConfig</h2>
+                <span class="toggle">▼</span>
+            </div>
+            <div class="section-body">
+                <pre id="configJson">Loading...</pre>
+            </div>
+        </div>
+
+        <div class="results-section" id="dataSection">
+            <div class="section-header" onclick="toggleSection('dataSection')">
+                <h2>Cleaned Data Preview</h2>
+                <span class="toggle">▼</span>
+            </div>
+            <div class="section-body">
+                <div class="stats-grid" id="dataStats"></div>
+                <div style="margin-top: 16px; overflow-x: auto;">
+                    <table class="data-table" id="dataTable">
+                        <thead id="dataTableHead"></thead>
+                        <tbody id="dataTableBody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div class="results-section" id="activitySection">
+            <div class="section-header" onclick="toggleSection('activitySection')">
+                <h2>Agent Activity Log</h2>
+                <span class="toggle">▼</span>
+            </div>
+            <div class="section-body" id="activityLog">
+                Loading...
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/results.js"></script>
+    <script>loadResults("{{ run_id }}");</script>
+</body>
+</html>
