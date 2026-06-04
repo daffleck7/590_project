@@ -1,0 +1,11 @@
+Order ID,Created at,Financial Status,Lineitem name,Lineitem variant,Lineitem quantity,Lineitem price
+5001,2024-08-15T10:00:00-07:00,PAID,Fall 2024 Game Jersey - Mens/Youth,Navy/YM,1,55.00
+5001,2024-08-15T10:00:00-07:00,PAID,Fall 2024 Game Short - Mens/Youth,Navy/YM,1,30.00
+5001,2024-08-15T10:00:00-07:00,PAID,Fall 2024 Game Sock - Mens/Youth,Navy/YM,1,15.00
+5002,2024-08-16T14:30:00-07:00,PAID,Fall 2024 Game Jersey - Womens,White/WS,2,55.00
+5002,2024-08-16T14:30:00-07:00,PAID,Fall 2024 Game Short - Womens,White/WS,2,30.00
+5003,2024-09-01T09:00:00-07:00,PAID,Fall 2024 Game Jersey - Mens/Youth,Navy/AL,1,55.00
+5004,2024-09-05T11:00:00-07:00,PAID,Fall 2024 Game Jersey - Mens/Youth,Navy/YL,3,55.00
+5005,2024-11-10T08:00:00-07:00,PAID,Winter 2024 Game Jersey - Mens/Youth,Black/AM,1,55.00
+5006,2024-03-20T12:00:00-07:00,PAID,Spring 2024 Game Jersey - Mens/Youth,Royal/YS,1,55.00
+5007,2024-08-20T10:00:00-07:00,REFUNDED,Fall 2024 Practice Jersey - Mens/Youth,Navy/YM,1,35.00
