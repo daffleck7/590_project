@@ -12,6 +12,8 @@ import anyio
 
 from src.intake.agent import run_intake_agent
 from src.data_ingestion.agent import run_cleaning_agent
+from src.explanation.agent import run_explanation_agent, save_explanation
+from src.models.optimization_result import OptimizationResult
 from src.models.problem_config import ProblemConfig
 
 
@@ -152,6 +154,56 @@ class Orchestrator:
             print("Warning: Data cleaning did not produce output.")
 
         print(f"Trace log:     {Path(self.run_dir) / 'trace.json'}")
+
+    async def run_explanation(
+        self,
+        result: OptimizationResult,
+        cleaned_csv_path: str,
+        config: ProblemConfig,
+        train_years: list[int] | None = None,
+        test_years: list[int] | None = None,
+    ) -> str | None:
+        """Run the explanation agent to produce a plain-English report.
+
+        Args:
+            result: OptimizationResult from the optimizer module.
+            cleaned_csv_path: Path to the aggregated cleaned CSV.
+            config: ProblemConfig used throughout the pipeline.
+            train_years: Training years for baseline. Defaults to 2020-2024.
+            test_years: Test years to evaluate on. Defaults to 2025-2026.
+
+        Returns:
+            Path to the saved report.md, or None on failure.
+        """
+        print(f"\n{'='*60}")
+        print("EXPLANATION AGENT")
+        print(f"{'='*60}")
+
+        start = time.time()
+        report_text, baseline_data, sensitivity_data = await run_explanation_agent(
+            result=result,
+            cleaned_csv_path=cleaned_csv_path,
+            config=config,
+            train_years=train_years,
+            test_years=test_years,
+        )
+        duration = time.time() - start
+
+        self.trace["steps"].append({
+            "agent": "explanation",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "duration_s": round(duration, 2),
+            "success": bool(report_text),
+        })
+
+        if report_text:
+            save_explanation(self.run_dir, report_text, baseline_data, sensitivity_data)
+            report_path = str(Path(self.run_dir) / "report.md")
+            print(f"\nReport saved to {report_path}")
+            return report_path
+
+        print("\nWarning: Explanation agent did not produce a report.")
+        return None
 
     async def run_cleaning_only(self, config_path: str) -> None:
         """Re-run just the data cleaning step with an existing config.
