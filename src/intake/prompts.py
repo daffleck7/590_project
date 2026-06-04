@@ -35,10 +35,13 @@ You must produce a JSON object with these fields:
 
 ## Tools Available
 
-- peek_columns: See column names and types in the CSV
-- sample_rows: See first N rows of the CSV
-- describe_column: Get stats for a specific column
-- list_unique_values: See unique values in a column
+All tools take `csv_path` (str) as their first argument. Use the exact path provided \
+in the opening message.
+
+- peek_columns(csv_path) → column names and dtypes
+- sample_rows(csv_path, n=10) → first N rows as a table
+- describe_column(csv_path, column) → stats for one column (count, nulls, uniques, min/max)
+- list_unique_values(csv_path, column) → unique values in a column (capped at 50)
 
 ## Rules
 

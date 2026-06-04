@@ -115,16 +115,37 @@ async def run_cleaning_agent(
 
     mcp_server = _build_mcp_server(csv_path, output_dir)
 
+    cleaned_csv_path = str(output_path / "cleaned_data.csv")
     prompt = (
-        f"Clean the data at: {csv_path}\n\n"
-        f"ProblemConfig:\n{config.model_dump_json(indent=2)}\n\n"
-        f"Save cleaned output to: {output_path / 'cleaned_data.csv'}\n\n"
-        f"Available output directory: {output_dir}"
+        f"## Data File\n\n"
+        f"Raw CSV path: {csv_path}\n"
+        f"Pass this exact path as `csv_path` to your inspection tools and when reading "
+        f"data in execute_code.\n\n"
+        f"## Output Location\n\n"
+        f"Save the final cleaned CSV to exactly this path: {cleaned_csv_path}\n"
+        f"Working directory for intermediate files: {output_dir}\n\n"
+        f"## Your First Step\n\n"
+        f"Call `peek_columns` with csv_path=\"{csv_path}\" to understand the raw data "
+        f"structure, then call `sample_rows` with the same path to see example rows.\n\n"
+        f"## ProblemConfig\n\n"
+        f"This config was produced by the intake agent and defines what the cleaned "
+        f"data must contain. Pay close attention to `data_requirements` — the prediction "
+        f"module downstream will expect exactly these columns.\n\n"
+        f"```json\n{config.model_dump_json(indent=2)}\n```\n\n"
+        f"## Output Requirements\n\n"
+        f"The cleaned CSV at `{cleaned_csv_path}` must:\n"
+        f"- Contain all columns listed in `data_requirements.required_columns`\n"
+        f"- Have a column matching each `uncertain_parameters[].data_column` so the "
+        f"prediction module can find them\n"
+        f"- Use consistent dtypes (numeric columns as numbers, dates as dates)\n"
+        f"- Print a final summary showing: row count, column names, null counts per column\n"
     )
 
     options = ClaudeAgentOptions(
         system_prompt=DATA_CLEANING_SYSTEM_PROMPT,
         mcp_servers={"cleaning": mcp_server},
+        allowed_tools=["Read"],
+        permission_mode="bypassPermissions",
         max_turns=20,
     )
 

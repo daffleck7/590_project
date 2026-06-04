@@ -84,18 +84,47 @@ async def run_intake_agent(
     mcp_server = _build_mcp_server()
     usage_log = []
 
-    prompt = f"CSV file is at: {csv_path}\n\n"
+    prompt = (
+        f"## Data File\n\n"
+        f"The CSV file you will be working with is at: {csv_path}\n"
+        f"Pass this exact path as the `csv_path` argument to all your data inspection tools.\n\n"
+        f"## Your First Step\n\n"
+        f"Call `peek_columns` with csv_path=\"{csv_path}\" to see what columns are available, "
+        f"then call `sample_rows` with the same path to see example data.\n\n"
+    )
     if initial_description:
-        prompt += f"Problem description: {initial_description}"
+        prompt += (
+            f"## Problem Description\n\n"
+            f"{initial_description}\n\n"
+            f"Use this description along with the data to formulate the ProblemConfig. "
+            f"Ask follow-up questions for anything that is missing or unclear.\n\n"
+        )
     else:
         prompt += (
-            "Please help me formulate an optimization problem. "
-            "Start by inspecting the data file, then ask me questions."
+            "## Task\n\n"
+            "The user has not provided a problem description yet. Start by inspecting "
+            "the data, then ask the user to describe their optimization problem. "
+            "Use what you learn from the data to ask targeted follow-up questions.\n\n"
         )
+    prompt += (
+        "## Output Format\n\n"
+        "When you have gathered enough information, produce a complete ProblemConfig "
+        "as a JSON code block wrapped in ```json ... ``` markers. This JSON will be "
+        "parsed by a Pydantic model and passed to the next pipeline stage (data cleaning), "
+        "so every field must be present and correctly typed.\n\n"
+        "Key fields downstream modules depend on:\n"
+        "- `data_requirements.required_columns`: the data cleaning agent uses this to "
+        "know which columns to produce in the cleaned dataset\n"
+        "- `uncertain_parameters[].data_column`: must match actual column names in the CSV "
+        "so the prediction module can find them\n"
+        "- `cost_structure`: the optimizer uses these exact keys to set up the objective function\n"
+    )
 
     options = ClaudeAgentOptions(
         system_prompt=INTAKE_SYSTEM_PROMPT,
         mcp_servers={"intake": mcp_server},
+        allowed_tools=["Read"],
+        permission_mode="bypassPermissions",
         max_turns=30,
     )
 
