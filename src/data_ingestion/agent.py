@@ -4,6 +4,7 @@ Uses the Claude Agent SDK with sandboxed code execution.
 """
 
 import json
+import re
 from collections.abc import Callable, Awaitable
 from pathlib import Path
 
@@ -32,31 +33,44 @@ except ImportError:
 
 def _build_mcp_server(csv_path: str, output_dir: str):
     """Build an MCP server with data cleaning tools."""
+
+    async def _peek(args: dict) -> dict:
+        return {"content": [{"type": "text", "text": peek_columns(args["csv_path"])}]}
+
+    async def _sample(args: dict) -> dict:
+        return {"content": [{"type": "text", "text": sample_rows(args["csv_path"], args.get("n", 10))}]}
+
+    async def _describe(args: dict) -> dict:
+        return {"content": [{"type": "text", "text": describe_column(args["csv_path"], args["column"])}]}
+
+    async def _cfa_clean(args: dict) -> dict:
+        return {"content": [{"type": "text", "text": run_cfa_cleaning(args["csv_path"], args["output_dir"])}]}
+
     peek_tool = tool(
         "peek_columns",
         "Return column names and dtypes from a CSV file",
         {"csv_path": str},
-    )(lambda args: {"content": [{"type": "text", "text": peek_columns(args["csv_path"])}]})
+    )(_peek)
 
     sample_tool = tool(
         "sample_rows",
         "Return first N rows from a CSV as a formatted table",
         {"csv_path": str, "n": int},
-    )(lambda args: {"content": [{"type": "text", "text": sample_rows(args["csv_path"], args.get("n", 10))}]})
+    )(_sample)
 
     describe_tool = tool(
         "describe_column",
         "Return summary statistics for a single CSV column",
         {"csv_path": str, "column": str},
-    )(lambda args: {"content": [{"type": "text", "text": describe_column(args["csv_path"], args["column"])}]})
+    )(_describe)
 
     cfa_tool = tool(
         "run_cfa_cleaning",
         "Run the CFA-specific cleaning pipeline on Squarespace order data",
         {"csv_path": str, "output_dir": str},
-    )(lambda args: {"content": [{"type": "text", "text": run_cfa_cleaning(args["csv_path"], args["output_dir"])}]})
+    )(_cfa_clean)
 
-    def _execute_code_handler(args):
+    async def _execute_code_handler(args: dict) -> dict:
         work_dir = Path(output_dir)
         result = execute_code(args["code"], work_dir, timeout=args.get("timeout", 30))
         if result.success:
@@ -76,9 +90,21 @@ def _build_mcp_server(csv_path: str, output_dir: str):
         {"code": str, "timeout": int},
     )(_execute_code_handler)
 
+    async def _save_summary(args: dict) -> dict:
+        summary_path = Path(output_dir) / "cleaning_summary.txt"
+        summary_path.write_text(args["summary"], encoding="utf-8")
+        return {"content": [{"type": "text", "text": "Summary saved."}]}
+
+    summary_tool = tool(
+        "save_summary",
+        "Save a structured summary of your cleaning work for the user to review. "
+        "Call this as your FINAL action after all cleaning is complete.",
+        {"summary": str},
+    )(_save_summary)
+
     return create_sdk_mcp_server(
         "data-cleaning-tools",
-        tools=[peek_tool, sample_tool, describe_tool, cfa_tool, exec_tool],
+        tools=[peek_tool, sample_tool, describe_tool, cfa_tool, exec_tool, summary_tool],
     )
 
 
@@ -174,14 +200,11 @@ async def run_cleaning_agent(
                     usage_log.append(message.usage)
                 for block in message.content:
                     if isinstance(block, TextBlock):
+                        if re.match(r'^mcp__\w+__\w+\(.*\)$', block.text.strip(), re.DOTALL):
+                            continue
                         await callback({"type": "message", "agent": "data_cleaning", "text": block.text})
                     elif hasattr(block, "name"):
-                        await callback({
-                            "type": "tool_call",
-                            "agent": "data_cleaning",
-                            "tool": getattr(block, "name", "unknown"),
-                            "args": getattr(block, "input", {}),
-                        })
+                        pass
 
     # Find the cleaned output
     cleaned_csv = output_path / "cleaned_data.csv"

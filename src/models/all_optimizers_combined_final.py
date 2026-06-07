@@ -35,9 +35,14 @@ import numpy as np
 import pandas as pd
 from scipy.optimize import minimize
 
-from problem_config import build_cfa_default_config, get_cost, get_budget, get_moq
-from data_module import DataModule
-from prediction_module import add_prediction
+try:
+    from src.models.problem_config import build_cfa_default_config, get_cost, get_budget, get_moq
+    from src.models.data_module import DataModule
+    from src.models.prediction_module import add_prediction
+except ImportError:
+    from problem_config import build_cfa_default_config, get_cost, get_budget, get_moq
+    from data_module import DataModule
+    from prediction_module import add_prediction
 
 
 # =============================================================================
@@ -510,12 +515,12 @@ def optimize_with_adam(
 # Comparison runner
 # =============================================================================
 
-def compare_optimizers(prediction_result, config):
+def compare_optimizers(prediction_result, config, n_restarts=15):
     """Run all five optimizers and return comparison table, all results, and best result."""
     results = []
 
     print("\nRunning SLSQP...")
-    results.append(optimize_with_slsqp(prediction_result, config, n_restarts=15))
+    results.append(optimize_with_slsqp(prediction_result, config, n_restarts=n_restarts))
     print(results[-1].summary())
 
     print("\nRunning L-BFGS-B...")

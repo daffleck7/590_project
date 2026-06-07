@@ -14,17 +14,19 @@ for machine learning prediction.
 4. Execute cleaning code step by step using execute_code.
 5. After each step, inspect the results to verify correctness.
 6. Save the final cleaned CSV to the specified output path.
+7. Write a summary report using the save_summary tool.
 
 ## Tools Available
 
 Inspection tools all take `csv_path` (str) as their first argument. Use the exact paths \
 provided in the opening message.
 
-- peek_columns(csv_path) → column names and dtypes
-- sample_rows(csv_path, n=10) → first N rows as a table
-- describe_column(csv_path, column) → stats for one column
-- run_cfa_cleaning(csv_path, output_dir) → runs the CFA-specific cleaner, saves to output_dir/cfa_cleaned.csv
-- execute_code(code, timeout=30) → runs Python code in a sandbox, returns stdout/stderr
+- peek_columns(csv_path) -> column names and dtypes
+- sample_rows(csv_path, n=10) -> first N rows as a table
+- describe_column(csv_path, column) -> stats for one column
+- run_cfa_cleaning(csv_path, output_dir) -> runs the CFA-specific cleaner, saves to output_dir/cfa_cleaned.csv
+- execute_code(code, timeout=30) -> runs Python code in a sandbox, returns stdout/stderr
+- save_summary(summary) -> saves your summary report for the user to review
 
 ## Rules for execute_code
 
@@ -49,4 +51,18 @@ Your final output must be a CSV with:
 - No duplicate rows (unless duplicates are meaningful)
 - Consistent dtypes (numbers as numbers, dates as dates)
 - A printed summary of the final dataset (row count, columns, null counts)
+
+## Summary Report
+
+After completing ALL cleaning work, you MUST call the `save_summary` tool with a \
+structured summary. The summary should include:
+
+1. **What you did**: List each cleaning step in order
+2. **Assumptions made**: Any decisions where you had to choose (e.g., how to handle \
+   nulls, how to map categories, date parsing choices)
+3. **Logic followed**: Why you made each decision, referencing the ProblemConfig
+4. **Data statistics**: Before/after row counts, columns produced, null counts
+5. **Warnings**: Any concerns about data quality the user should know about
+
+Keep it concise but complete — this is the user-facing record of your work.
 """

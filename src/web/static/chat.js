@@ -1,8 +1,10 @@
-/* Chat page — file upload, SSE streaming, message rendering */
+/* Chat page — file upload, SSE streaming, progress tracking */
 
 let runId = null;
 let eventSource = null;
 
+const chatView = document.getElementById("chatView");
+const progressView = document.getElementById("progressView");
 const chatContainer = document.getElementById("chatContainer");
 const chatInput = document.getElementById("chatInput");
 const sendBtn = document.getElementById("sendBtn");
@@ -101,8 +103,28 @@ async function sendMessage() {
         return;
     }
 
+    showTypingIndicator();
     startSSE();
 }
+
+/* --- Typing Indicator --- */
+
+function showTypingIndicator() {
+    removeTypingIndicator();
+    const div = document.createElement("div");
+    div.className = "message agent typing-indicator";
+    div.id = "typingIndicator";
+    div.innerHTML = '<span style="font-size:24px;color:#58a6ff;">&#9679; &#9679; &#9679;</span>';
+    chatContainer.appendChild(div);
+    chatContainer.scrollTop = chatContainer.scrollHeight;
+}
+
+function removeTypingIndicator() {
+    const el = document.getElementById("typingIndicator");
+    if (el) el.remove();
+}
+
+/* --- SSE --- */
 
 function startSSE() {
     if (eventSource) eventSource.close();
@@ -111,10 +133,25 @@ function startSSE() {
 
     eventSource.addEventListener("message", (e) => {
         const data = JSON.parse(e.data);
+        /* Only remove indicator when we have actual content to show */
+        if (data.type === "message" || data.type === "config_ready" || data.type === "error") {
+            removeTypingIndicator();
+        }
         handleEvent(data);
+        showTypingIndicator();
     });
 
     eventSource.addEventListener("done", (e) => {
+        removeTypingIndicator();
+        eventSource.close();
+        eventSource = null;
+        chatInput.disabled = false;
+        sendBtn.disabled = false;
+        chatInput.focus();
+    });
+
+    eventSource.addEventListener("waiting", (e) => {
+        removeTypingIndicator();
         eventSource.close();
         eventSource = null;
         chatInput.disabled = false;
@@ -123,6 +160,7 @@ function startSSE() {
     });
 
     eventSource.addEventListener("error", () => {
+        removeTypingIndicator();
         eventSource.close();
         eventSource = null;
         chatInput.disabled = false;
@@ -130,31 +168,128 @@ function startSSE() {
     });
 }
 
+/* --- Progress-mode SSE (after approval) --- */
+
+function startProgressSSE() {
+    if (eventSource) eventSource.close();
+
+    eventSource = new EventSource("/chat/stream?run_id=" + runId);
+
+    eventSource.addEventListener("message", (e) => {
+        const data = JSON.parse(e.data);
+        handleProgressEvent(data);
+    });
+
+    eventSource.addEventListener("done", () => {
+        eventSource.close();
+        eventSource = null;
+        document.getElementById("headerStatus").textContent = "Complete";
+        document.getElementById("progressBar").style.width = "100%";
+        document.getElementById("progressLabel").textContent = "Pipeline complete";
+        setStep("stepDone", "done");
+        btnResults.href = "/run/" + runId;
+        btnResults.classList.add("visible");
+    });
+
+    eventSource.addEventListener("error", () => {
+        eventSource.close();
+        eventSource = null;
+    });
+}
+
+function handleProgressEvent(event) {
+    switch (event.type) {
+        case "message":
+            /* Ignore long agent text — only show short status updates */
+            break;
+        case "cleaning_start":
+            setStep("stepCleaning", "active");
+            activateStage("stageCleaning", "cleaningIcon");
+            updateProgress(10, "Cleaning data...");
+            break;
+        case "cleaning_done":
+            setStep("stepCleaning", "done");
+            completeStage("stageCleaning", "cleaningIcon");
+            setStageSummary("cleaning", "Data cleaned and saved.");
+            updateProgress(25, "Data cleaning complete");
+            break;
+        case "stage_summary":
+            /* Summaries are saved to files for the explanation agent — don't render them */
+            break;
+        case "modeling_start":
+            setStep("stepModeling", "active");
+            activateStage("stageModeling", "modelingIcon");
+            updateProgress(30, "Modeling agent working...");
+            break;
+        case "modeling_done":
+            setStep("stepModeling", "done");
+            completeStage("stageModeling", "modelingIcon");
+            setStageSummary("modeling", "Prediction and optimization complete.");
+            updateProgress(70, "Modeling complete");
+            break;
+        case "explanation_start":
+            setStep("stepExplanation", "active");
+            activateStage("stageExplanation", "explanationIcon");
+            updateProgress(75, "Generating final report...");
+            break;
+        case "explanation_done":
+            setStep("stepExplanation", "done");
+            completeStage("stageExplanation", "explanationIcon");
+            setStageSummary("explanation", "Report ready.");
+            updateProgress(100, "Report ready");
+            break;
+        case "error":
+            document.getElementById("progressLabel").textContent = "Error: " + event.message;
+            document.getElementById("headerStatus").textContent = "Error";
+            break;
+    }
+}
+
+function updateProgress(pct, label) {
+    document.getElementById("progressBar").style.width = pct + "%";
+    document.getElementById("progressLabel").textContent = label;
+}
+
+function activateStage(stageId, iconId) {
+    const card = document.getElementById(stageId);
+    card.classList.remove("pending");
+    card.classList.add("active");
+    document.getElementById(iconId).innerHTML = '<span class="spinner"></span>';
+}
+
+function completeStage(stageId, iconId) {
+    const card = document.getElementById(stageId);
+    card.classList.remove("active");
+    card.classList.add("completed");
+    document.getElementById(iconId).innerHTML = "&#10003;";
+    document.getElementById(iconId).classList.add("done-icon");
+}
+
+function setStageSummary(stage, summary) {
+    const map = {
+        "cleaning": "cleaningSummary",
+        "modeling": "modelingSummary",
+        "explanation": "explanationSummary",
+    };
+    const el = document.getElementById(map[stage]);
+    if (el) el.textContent = summary;
+}
+
+/* --- Event Handling (chat phase) --- */
+
 function handleEvent(event) {
     switch (event.type) {
         case "message":
             addMessage("agent", event.text);
             break;
         case "tool_call":
-            addToolCall(event.tool, event.args);
+            /* Hidden — typing indicator handles this */
             break;
         case "tool_result":
-            updateToolResult(event.tool, event.result);
+            /* Hidden */
             break;
         case "config_ready":
             addConfigCard(event.config);
-            break;
-        case "cleaning_start":
-            setStep("stepIntake", "done");
-            setStep("stepCleaning", "active");
-            addMessage("agent", "Starting data cleaning...");
-            break;
-        case "cleaning_done":
-            setStep("stepCleaning", "done");
-            setStep("stepDone", "done");
-            btnResults.href = "/run/" + runId;
-            btnResults.classList.add("visible");
-            addMessage("agent", "Pipeline complete! Click 'View Results' to see the output.");
             break;
         case "error":
             addMessage("agent", "Error: " + event.message);
@@ -172,54 +307,35 @@ function addMessage(role, text) {
     chatContainer.scrollTop = chatContainer.scrollHeight;
 }
 
-function addToolCall(toolName, args) {
-    const div = document.createElement("div");
-    div.className = "message tool-call";
-    div.id = "tool-" + Date.now();
-    const argsStr = Object.entries(args || {})
-        .map(function(entry) { return entry[0] + "=" + JSON.stringify(entry[1]); })
-        .join(", ");
-    div.innerHTML = '<span class="tool-name">' + toolName + '</span>(' + argsStr + ')<div class="tool-result"></div>';
-    div.addEventListener("click", function() { div.classList.toggle("expanded"); });
-    chatContainer.appendChild(div);
-    chatContainer.scrollTop = chatContainer.scrollHeight;
-}
-
-function updateToolResult(toolName, result) {
-    const toolCalls = document.querySelectorAll(".message.tool-call");
-    for (let i = toolCalls.length - 1; i >= 0; i--) {
-        const tc = toolCalls[i];
-        if (tc.querySelector(".tool-name").textContent === toolName) {
-            const resultDiv = tc.querySelector(".tool-result");
-            resultDiv.textContent = result;
-            break;
-        }
-    }
-}
-
 function addConfigCard(config) {
     const div = document.createElement("div");
     div.className = "config-card";
     div.innerHTML =
-        '<h3>&gt; ProblemConfig</h3>' +
-        '<pre>' + JSON.stringify(config, null, 2) + '</pre>' +
-        '<button onclick="proceedToCleaning()">Proceed to Data Cleaning &rarr;</button>';
+        '<h3>&gt; ProblemConfig saved</h3>' +
+        '<p>The config has been validated and saved. Review the summary above.</p>' +
+        '<button onclick="approveAndRun()">Approve &amp; Begin Optimization &#8594;</button>';
     chatContainer.appendChild(div);
     chatContainer.scrollTop = chatContainer.scrollHeight;
 }
 
-async function proceedToCleaning() {
+async function approveAndRun() {
+    /* Switch to progress view */
+    chatView.style.display = "none";
+    progressView.style.display = "flex";
+    setStep("stepIntake", "done");
+
     const resp = await fetch("/run/clean", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ run_id: runId }),
     });
+
     if (resp.ok) {
-        startSSE();
+        startProgressSSE();
     }
 }
 
 function setStep(stepId, state) {
     var el = document.getElementById(stepId);
-    el.className = "pipeline-step " + state;
+    if (el) el.className = "pipeline-step " + state;
 }

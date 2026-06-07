@@ -8,7 +8,8 @@
 </head>
 <body>
     <div class="app">
-        <div class="main-panel">
+        <!-- Phase 1: Chat with intake agent -->
+        <div class="main-panel" id="chatView">
             <div class="header">
                 <h1>> cfa-optimization-agent</h1>
             </div>
@@ -32,12 +33,61 @@
             </div>
         </div>
 
+        <!-- Phase 2: Pipeline progress (hidden initially) -->
+        <div class="main-panel" id="progressView" style="display:none">
+            <div class="header">
+                <h1>> cfa-optimization-agent</h1>
+                <span class="header-status" id="headerStatus">Running...</span>
+            </div>
+
+            <div class="progress-content">
+                <div class="progress-bar-container">
+                    <div class="progress-bar" id="progressBar" style="width: 0%"></div>
+                </div>
+                <div class="progress-label" id="progressLabel">Initializing...</div>
+
+                <div class="stage-cards" id="stageCards">
+                    <div class="stage-card" id="stageIntake">
+                        <div class="stage-header">
+                            <span class="stage-icon done-icon">&#10003;</span>
+                            <span class="stage-title">Problem Formulation</span>
+                        </div>
+                        <div class="stage-summary" id="intakeSummary">Config approved by user.</div>
+                    </div>
+
+                    <div class="stage-card pending" id="stageCleaning">
+                        <div class="stage-header">
+                            <span class="stage-icon" id="cleaningIcon">2</span>
+                            <span class="stage-title">Data Cleaning Agent</span>
+                        </div>
+                        <div class="stage-summary" id="cleaningSummary"></div>
+                    </div>
+
+                    <div class="stage-card pending" id="stageModeling">
+                        <div class="stage-header">
+                            <span class="stage-icon" id="modelingIcon">3</span>
+                            <span class="stage-title">Modeling Agent</span>
+                        </div>
+                        <div class="stage-summary" id="modelingSummary"></div>
+                    </div>
+
+                    <div class="stage-card pending" id="stageExplanation">
+                        <div class="stage-header">
+                            <span class="stage-icon" id="explanationIcon">4</span>
+                            <span class="stage-title">Explanation Agent</span>
+                        </div>
+                        <div class="stage-summary" id="explanationSummary"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <div class="sidebar">
             <h2>Status</h2>
 
             <div class="status-item" id="uploadStatus" style="display:none">
                 <div class="label">Uploaded File</div>
-                <div class="value" id="uploadStatusFile">—</div>
+                <div class="value" id="uploadStatusFile">--</div>
             </div>
 
             <h2>Pipeline</h2>
@@ -54,13 +104,21 @@
                     <div class="dot"></div>
                     <span>Data Cleaning</span>
                 </div>
+                <div class="pipeline-step" id="stepModeling">
+                    <div class="dot"></div>
+                    <span>Modeling</span>
+                </div>
+                <div class="pipeline-step" id="stepExplanation">
+                    <div class="dot"></div>
+                    <span>Explanation</span>
+                </div>
                 <div class="pipeline-step" id="stepDone">
                     <div class="dot"></div>
                     <span>Complete</span>
                 </div>
             </div>
 
-            <a class="btn-results" id="btnResults" href="#">View Results →</a>
+            <a class="btn-results" id="btnResults" href="#">View Results &#8594;</a>
         </div>
     </div>
 

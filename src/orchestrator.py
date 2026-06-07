@@ -3,6 +3,7 @@
 Manages run directories, trace logging, and the handoff between agents.
 """
 
+import asyncio
 import json
 import time
 from collections.abc import Callable, Awaitable
@@ -13,6 +14,8 @@ import anyio
 
 from src.intake.agent import run_intake_agent
 from src.data_ingestion.agent import run_cleaning_agent
+from src.modeling.agent import run_modeling_agent
+from src.explanation.agent import run_explanation_agent
 from src.models.problem_config import ProblemConfig
 
 
@@ -54,6 +57,7 @@ class Orchestrator:
         csv_path: str,
         base_dir: str = "runs",
         callback: Callable[[dict], Awaitable[None]] | None = None,
+        interactive: bool = True,
     ) -> None:
         """Initialize the orchestrator.
 
@@ -61,11 +65,14 @@ class Orchestrator:
             csv_path: Path to the raw CSV file.
             base_dir: Parent directory for run outputs.
             callback: Optional async callback for event routing.
+            interactive: If True, allow stdin prompts (CLI mode).
         """
         self.csv_path = csv_path
         self.run_dir = create_run_directory(base_dir)
         self.trace: dict = {"steps": [], "run_dir": self.run_dir}
         self.callback = callback
+        self.interactive = interactive
+        self.user_input_queue: asyncio.Queue[str] = asyncio.Queue()
         self.activity_log: list[dict] = []
 
     async def _log_event(self, event: dict) -> None:
@@ -91,8 +98,10 @@ class Orchestrator:
         print(f"{'='*60}")
 
         start = time.time()
+        input_queue = None if self.interactive else self.user_input_queue
         config, usage_log = await run_intake_agent(
-            self.csv_path, description, callback=self._log_event
+            self.csv_path, self.run_dir, description, callback=self._log_event,
+            user_input_queue=input_queue,
         )
         duration = time.time() - start
 
@@ -105,9 +114,7 @@ class Orchestrator:
         })
 
         if config:
-            config_path = Path(self.run_dir) / "problem_config.json"
-            config_path.write_text(config.model_dump_json(indent=2))
-            print(f"\nProblemConfig saved to {config_path}")
+            print(f"\nProblemConfig saved to {Path(self.run_dir) / 'problem_config.json'}")
 
         return config
 
@@ -149,6 +156,90 @@ class Orchestrator:
         })
 
         return cleaned_path, manifest
+
+    async def run_modeling(
+        self, config: ProblemConfig, cleaned_csv_path: str
+    ) -> bool:
+        """Run the modeling agent (prediction + optimization).
+
+        Args:
+            config: ProblemConfig for cost structure and constraints.
+            cleaned_csv_path: Path to the cleaned CSV.
+
+        Returns:
+            True if successful, False otherwise.
+        """
+        print(f"\n{'='*60}")
+        print("MODELING AGENT")
+        print(f"{'='*60}")
+
+        await self._log_event({"type": "modeling_start"})
+
+        start = time.time()
+        success, usage_log = await run_modeling_agent(
+            config, cleaned_csv_path, self.run_dir, callback=self._log_event
+        )
+        duration = time.time() - start
+
+        self.trace["steps"].append({
+            "agent": "modeling",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "duration_s": round(duration, 2),
+            "usage": usage_log,
+            "success": success,
+        })
+
+        await self._log_event({"type": "modeling_done"})
+
+        # Read and emit the summary
+        summary_path = Path(self.run_dir) / "modeling_summary.txt"
+        if summary_path.exists():
+            await self._log_event({
+                "type": "stage_summary",
+                "stage": "modeling",
+                "summary": summary_path.read_text(encoding="utf-8", errors="replace"),
+            })
+
+        return success
+
+    async def run_explanation(self) -> bool:
+        """Run the explanation agent to produce the final report.
+
+        Returns:
+            True if report was generated, False otherwise.
+        """
+        print(f"\n{'='*60}")
+        print("EXPLANATION AGENT")
+        print(f"{'='*60}")
+
+        await self._log_event({"type": "explanation_start"})
+
+        start = time.time()
+        success, usage_log = await run_explanation_agent(
+            self.run_dir, callback=self._log_event
+        )
+        duration = time.time() - start
+
+        self.trace["steps"].append({
+            "agent": "explanation",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "duration_s": round(duration, 2),
+            "usage": usage_log,
+            "success": success,
+        })
+
+        await self._log_event({"type": "explanation_done"})
+
+        # Read and emit the report
+        report_path = Path(self.run_dir) / "final_report.md"
+        if report_path.exists():
+            await self._log_event({
+                "type": "stage_summary",
+                "stage": "explanation",
+                "summary": report_path.read_text(encoding="utf-8", errors="replace"),
+            })
+
+        return success
 
     async def run_full_pipeline(self, description: str = "") -> None:
         """Run the complete intake + data cleaning pipeline.

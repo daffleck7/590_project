@@ -61,14 +61,34 @@ class PredictionResult:
         )
 
 
+@dataclass
+class PredictionParams:
+    """Tunable hyperparameters for the prediction models."""
+
+    xgb_n_estimators: int = 300
+    xgb_max_depth: int = 4
+    xgb_learning_rate: float = 0.05
+    xgb_subsample: float = 0.8
+    xgb_colsample_bytree: float = 0.8
+    lgbm_n_estimators: int = 300
+    lgbm_max_depth: int = 4
+    lgbm_learning_rate: float = 0.05
+    lgbm_subsample: float = 0.8
+    ridge_alpha: float = 1.0
+    pto_strength: float = 0.8
+    train_years: list[int] = field(default_factory=lambda: [2020, 2021, 2022, 2023])
+    test_years: list[int] = field(default_factory=lambda: [2024])
+
+
 class PredictionModule:
 
-    def __init__(self, config):
+    def __init__(self, config, params: PredictionParams | None = None):
         self.config = config
+        self.params = params or PredictionParams()
 
     def run(self, bundle) -> PredictionResult:
-        train_years = [2020, 2021, 2022, 2023]
-        test_years  = [2024]
+        train_years = self.params.train_years
+        test_years  = self.params.test_years
 
         dtr = bundle.demand_pivot[bundle.demand_pivot["year"].isin(train_years)].copy().reset_index(drop=True)
         dte = bundle.demand_pivot[bundle.demand_pivot["year"].isin(test_years)].copy().reset_index(drop=True)
@@ -114,7 +134,7 @@ class PredictionModule:
         print(f"[PredictionModule] Results:")
         for name, cost in sorted(all_costs.items(), key=lambda x: x[1]):
             chg    = (cost / baseline_cost - 1) * 100
-            winner = " ← WINNER" if name == best_name else ""
+            winner = " <-- WINNER" if name == best_name else ""
             print(f"  {name:<20}: ${cost:>9,.0f}  ({chg:+.1f}%){winner}")
 
         sigma_arr = np.array([sigma_cat.get(dte.loc[i,"product_category"], 10.0) for i in range(len(dte))])
@@ -162,24 +182,27 @@ class PredictionModule:
         return dte_b["bq"].values, self._total_nv_cost(dte_b["bq"].values, dte_b.reset_index(drop=True))
 
     def _model_xgboost(self, Xtr, ytr, Xte, dte):
-        m = XGBRegressor(n_estimators=300,max_depth=4,learning_rate=0.05,subsample=0.8,colsample_bytree=0.8,random_state=42,verbosity=0)
-        m.fit(Xtr, ytr); p = np.maximum(m.predict(Xte), 0)
-        return m, p, self._total_nv_cost(p, dte)
+        p = self.params
+        m = XGBRegressor(n_estimators=p.xgb_n_estimators,max_depth=p.xgb_max_depth,learning_rate=p.xgb_learning_rate,subsample=p.xgb_subsample,colsample_bytree=p.xgb_colsample_bytree,random_state=42,verbosity=0)
+        m.fit(Xtr, ytr); pred = np.maximum(m.predict(Xte), 0)
+        return m, pred, self._total_nv_cost(pred, dte)
 
     def _model_lightgbm(self, Xtr, ytr, Xte, dte):
-        m = LGBMRegressor(n_estimators=300,max_depth=4,learning_rate=0.05,subsample=0.8,random_state=42,verbose=-1)
-        m.fit(Xtr, ytr); p = np.maximum(m.predict(Xte), 0)
-        return m, p, self._total_nv_cost(p, dte)
+        p = self.params
+        m = LGBMRegressor(n_estimators=p.lgbm_n_estimators,max_depth=p.lgbm_max_depth,learning_rate=p.lgbm_learning_rate,subsample=p.lgbm_subsample,random_state=42,verbose=-1)
+        m.fit(Xtr, ytr); pred = np.maximum(m.predict(Xte), 0)
+        return m, pred, self._total_nv_cost(pred, dte)
 
     def _model_ridge(self, Xtr, ytr, Xte, dte):
         sc = StandardScaler(); Xtr_s = sc.fit_transform(Xtr); Xte_s = sc.transform(Xte)
-        m = Ridge(alpha=1.0); m.fit(Xtr_s, ytr); p = np.maximum(m.predict(Xte_s), 0)
-        return m, p, self._total_nv_cost(p, dte)
+        m = Ridge(alpha=self.params.ridge_alpha); m.fit(Xtr_s, ytr); pred = np.maximum(m.predict(Xte_s), 0)
+        return m, pred, self._total_nv_cost(pred, dte)
 
     def _pto_adjust(self, pred, dte):
+        strength = self.params.pto_strength
         def sf(cat, lyr):
             co = self._get_cost(cat,"overage_cost",lyr); cu = self._get_cost(cat,"underage_cost",lyr)
-            return 1.0 + (cu/(cu+co) - 0.5) * 0.8
+            return 1.0 + (cu/(cu+co) - 0.5) * strength
         p = np.array([pred[i]*sf(dte.loc[i,"product_category"],int(dte.loc[i,"lifecycle_year"])) for i in range(len(dte))])
         return np.maximum(p,0), self._total_nv_cost(np.maximum(p,0), dte)
 
@@ -212,14 +235,15 @@ class PredictionModule:
         return 6
 
 
-def add_prediction(bundle, config) -> PredictionResult:
+def add_prediction(bundle, config, params: PredictionParams | None = None) -> PredictionResult:
+    """Run prediction with optional tunable parameters.
+
+    Args:
+        bundle: DataBundle from DataModule.
+        config: ProblemConfig for cost lookups.
+        params: Optional hyperparameters. Uses defaults if None.
+
+    Returns:
+        PredictionResult with model comparison and best predictions.
     """
-    Single function call for orchestrator.
-    
-    Usage:
-        from prediction_module import add_prediction
-        result = add_prediction(bundle, config)
-        print(result.summary())
-        # result.predicted_demand, result.P10, result.P90 → Step 4
-    """
-    return PredictionModule(config).run(bundle)
+    return PredictionModule(config, params).run(bundle)

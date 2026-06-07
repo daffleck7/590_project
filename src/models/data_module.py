@@ -24,10 +24,13 @@ import pandas as pd
 # We import lazily so this module can be imported even if problem_config
 # is not on sys.path yet — the caller wires the path.
 try:
-    from problem_config import ProblemConfig, DataRequirements
+    from src.models.problem_config import ProblemConfig, DataRequirements
 except ImportError:
-    ProblemConfig = None  # type: ignore
-    DataRequirements = None  # type: ignore
+    try:
+        from problem_config import ProblemConfig, DataRequirements
+    except ImportError:
+        ProblemConfig = None  # type: ignore
+        DataRequirements = None  # type: ignore
 
 
 # ---------------------------------------------------------------------------
@@ -114,7 +117,7 @@ class DataModule:
             "sizes": sorted(df["size"].unique().tolist()),
             "categories": sorted(df["product_category"].unique().tolist()),
             "seasons": sorted(df["season"].unique().tolist()),
-            "uniform_sets": sorted(df["uniform_set"].unique().tolist()),
+            "uniform_sets": sorted(df["uniform_set"].unique().tolist()) if "uniform_set" in df.columns else [],
             "demand_groups": len(demand_pivot),
         }
 
@@ -143,9 +146,10 @@ class DataModule:
         # Parse dates
         df["order_date"] = pd.to_datetime(df["order_date"])
 
-        # Normalise string columns
+        # Normalise string columns (only those present)
         for col in ["season", "product_category", "size", "uniform_set", "gender_age"]:
-            df[col] = df[col].str.strip().str.lower()
+            if col in df.columns:
+                df[col] = df[col].str.strip().str.lower()
 
         # Drop rows where key fields are null (should be zero from clean_data.py but be safe)
         before = len(df)
