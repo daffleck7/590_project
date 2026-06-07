@@ -356,8 +356,18 @@ def optimize_with_slsqp(prediction_result, config, n_restarts=15, random_state=4
 # Optimizer 2: L-BFGS-B
 # =============================================================================
 
-def optimize_with_lbfgsb(prediction_result, config, penalty_weight=10_000.0):
-    """L-BFGS-B handles bounds directly; budget is handled by penalty + projection."""
+def make_starts(q0: np.ndarray, scenarios: np.ndarray, n_restarts: int, random_state: int = 42) -> list[np.ndarray]:
+    """Generate a deterministic set of starting points for multi-start optimization."""
+    rng = np.random.default_rng(random_state)
+    starts = [q0, scenarios[1], scenarios.mean(axis=0)]
+    for _ in range(max(0, n_restarts - len(starts))):
+        w = rng.dirichlet(np.ones(scenarios.shape[0]))
+        starts.append(w @ scenarios)
+    return starts
+
+
+def optimize_with_lbfgsb(prediction_result, config, penalty_weight=20_000.0, n_restarts=20, random_state=42):
+    """L-BFGS-B with multi-start restarts and penalty-based budget handling."""
     df, scenarios, budget, moq, q0 = prepare_optimization_inputs(prediction_result, config)
     bounds = [(moq, None) for _ in range(len(df))]
 
@@ -368,24 +378,35 @@ def optimize_with_lbfgsb(prediction_result, config, penalty_weight=10_000.0):
             smooth_k=5.0,
         )
 
+    starts = [np.maximum(s, moq) for s in make_starts(q0, scenarios, n_restarts, random_state=random_state)]
     start_time = time.time()
-    res = minimize(
-        fun=lambda q: fun_and_jac(q)[0],
-        x0=q0,
-        jac=lambda q: fun_and_jac(q)[1],
-        method="L-BFGS-B",
-        bounds=bounds,
-        options={"maxiter": 2000, "ftol": 1e-8, "disp": False},
-    )
+    best_res = None
+    best_obj = np.inf
 
-    q_projected = project_to_season_budget(res.x, df, budget, moq)
-    q = round_and_repair(q_projected, df, scenarios, budget, moq)
+    for x0 in starts:
+        x0 = project_to_season_budget(x0, df, budget, moq)
+        res = minimize(
+            fun=lambda q: fun_and_jac(q)[0],
+            x0=x0,
+            jac=lambda q: fun_and_jac(q)[1],
+            method="L-BFGS-B",
+            bounds=bounds,
+            options={"maxiter": 2000, "ftol": 1e-8, "disp": False},
+        )
+
+        candidate = project_to_season_budget(res.x, df, budget, moq)
+        candidate_obj = saa_objective(candidate, scenarios, df)
+        if candidate_obj < best_obj:
+            best_obj = candidate_obj
+            best_res = res
+
+    q = round_and_repair(project_to_season_budget(best_res.x, df, budget, moq), df, scenarios, budget, moq)
     runtime = time.time() - start_time
 
     return make_result(
         "L-BFGS-B", q, df, scenarios, budget, runtime,
-        getattr(res, "nit", -1), bool(res.success), str(res.message),
-        {"penalty_weight": penalty_weight},
+        getattr(best_res, "nit", -1), bool(best_res.success), str(best_res.message),
+        {"penalty_weight": penalty_weight, "n_restarts": n_restarts},
     )
 
 
@@ -519,7 +540,7 @@ def compare_optimizers(prediction_result, config):
     print(results[-1].summary())
 
     print("\nRunning L-BFGS-B...")
-    results.append(optimize_with_lbfgsb(prediction_result, config))
+    results.append(optimize_with_lbfgsb(prediction_result, config, penalty_weight=20_000.0, n_restarts=20))
     print(results[-1].summary())
 
     print("\nRunning Gradient Descent...")
