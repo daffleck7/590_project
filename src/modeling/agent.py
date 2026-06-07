@@ -22,6 +22,8 @@ from src.models.problem_config import ProblemConfig
 from src.models.data_module import DataModule
 from src.models.prediction_module import add_prediction, PredictionParams
 from src.models.all_optimizers_combined_final import compare_optimizers
+from src.explanation.sensitivity import sensitivity_analysis
+from src.explanation.baseline import baseline_comparison
 from src.data_ingestion.sandbox import execute_code
 
 
@@ -236,6 +238,129 @@ def _build_mcp_server(
 
         return {"content": [{"type": "text", "text": "\n".join(lines)}]}
 
+    async def _run_sensitivity(args: dict) -> dict:
+        """Run sensitivity analysis on cost parameters."""
+        if state["prediction_result"] is None:
+            return {
+                "content": [{"type": "text", "text": "Error: call run_optimization first"}],
+                "isError": True,
+            }
+
+        # Build order quantities dict from the best optimizer's order plan
+        order_plan_path = Path(run_dir) / "best_optimizer_order_plan.csv"
+        if not order_plan_path.exists():
+            return {
+                "content": [{"type": "text", "text": "Error: call run_optimization first"}],
+                "isError": True,
+            }
+
+        import pandas as pd
+        plan_df = pd.read_csv(order_plan_path)
+        order_quantities = {}
+        for _, row in plan_df.iterrows():
+            key = f"{row['product_category']}_{row['gender_age']}_{row['size']}".lower()
+            order_quantities[key] = float(row["recommended_order_qty"])
+
+        # Get test demand data
+        demand_df = state["prediction_result"].demand_df.copy()
+
+        result = sensitivity_analysis(order_quantities, demand_df, config)
+
+        # Save to file for explanation agent
+        import json as _json
+        sensitivity_path = Path(run_dir) / "sensitivity_results.json"
+        sensitivity_path.write_text(_json.dumps(result, indent=2), encoding="utf-8")
+
+        lines = [
+            f"Sensitivity Analysis (base cost: ${result['base_cost']:,.2f})",
+            "",
+            "Overage cost sensitivity (co shifted):",
+        ]
+        for row in result["co_sensitivity"]:
+            lines.append(f"  {row['shift_pct']:+d}%: ${row['total_cost']:,.2f} ({row['pct_change']:+.1f}%)")
+        lines.extend(["", "Underage cost sensitivity (cu shifted):"])
+        for row in result["cu_sensitivity"]:
+            lines.append(f"  {row['shift_pct']:+d}%: ${row['total_cost']:,.2f} ({row['pct_change']:+.1f}%)")
+
+        return {"content": [{"type": "text", "text": "\n".join(lines)}]}
+
+    async def _run_baseline(args: dict) -> dict:
+        """Compare agent orders vs historical-average baseline."""
+        if state["bundle"] is None:
+            return {
+                "content": [{"type": "text", "text": "Error: call load_data first"}],
+                "isError": True,
+            }
+
+        order_plan_path = Path(run_dir) / "best_optimizer_order_plan.csv"
+        if not order_plan_path.exists():
+            return {
+                "content": [{"type": "text", "text": "Error: call run_optimization first"}],
+                "isError": True,
+            }
+
+        import pandas as pd
+        plan_df = pd.read_csv(order_plan_path)
+        agent_quantities = {}
+        for _, row in plan_df.iterrows():
+            key = f"{row['product_category']}_{row['gender_age']}_{row['size']}".lower()
+            agent_quantities[key] = float(row["recommended_order_qty"])
+
+        # Use the full demand data for baseline computation
+        demand_pivot = state["bundle"].demand_pivot.copy()
+        # Need unit_price — merge from cleaned data
+        cleaned_df = pd.read_csv(cleaned_csv_path)
+        if "unit_price" not in demand_pivot.columns:
+            price_map = cleaned_df.groupby(
+                ["product_category", "size"]
+            )["unit_price"].mean().reset_index()
+            demand_pivot = demand_pivot.merge(
+                price_map, on=["product_category", "size"], how="left"
+            )
+            demand_pivot["unit_price"] = demand_pivot["unit_price"].fillna(25.0)
+
+        # Need gender_age column
+        if "gender_age" not in demand_pivot.columns:
+            demand_pivot["gender_age"] = "unknown"
+
+        train_years = config.data_requirements.train_years
+        test_years = config.data_requirements.test_years
+
+        result = baseline_comparison(
+            agent_quantities, demand_pivot, config,
+            train_years=train_years, test_years=test_years,
+        )
+
+        # Save to file for explanation agent
+        import json as _json
+        baseline_path = Path(run_dir) / "baseline_results.json"
+        # Convert to serializable (by_sku can be large)
+        save_result = {
+            "agent_cost": result["agent_cost"],
+            "baseline_cost": result["baseline_cost"],
+            "cost_reduction_pct": result["cost_reduction_pct"],
+            "savings_usd": result["savings_usd"],
+            "by_category": result["by_category"],
+        }
+        baseline_path.write_text(_json.dumps(save_result, indent=2), encoding="utf-8")
+
+        lines = [
+            "Baseline Comparison: Agent vs Historical Average",
+            f"  Agent total cost: ${result['agent_cost']:,.2f}",
+            f"  Baseline total cost: ${result['baseline_cost']:,.2f}",
+            f"  Savings: ${result['savings_usd']:,.2f} ({result['cost_reduction_pct']:.1f}%)",
+            "",
+            "By category:",
+        ]
+        for cat in result["by_category"]:
+            lines.append(
+                f"  {cat['product_category']}: agent=${cat['agent_cost']:,.2f}, "
+                f"baseline=${cat['baseline_cost']:,.2f}, "
+                f"savings=${cat['savings']:,.2f}"
+            )
+
+        return {"content": [{"type": "text", "text": "\n".join(lines)}]}
+
     async def _save_summary(args: dict) -> dict:
         """Save structured summary of modeling work."""
         summary_path = Path(run_dir) / "modeling_summary.txt"
@@ -294,6 +419,22 @@ def _build_mcp_server(
         {"code": str, "timeout": int},
     )(_execute_code_handler)
 
+    sensitivity_tool = tool(
+        "run_sensitivity",
+        "Run sensitivity analysis — shows how total cost changes when overage "
+        "and underage cost parameters shift by -30% to +30%. Must call "
+        "run_optimization first. Saves results to sensitivity_results.json.",
+        {},
+    )(_run_sensitivity)
+
+    baseline_tool = tool(
+        "run_baseline",
+        "Compare agent's optimized orders against a naive baseline (historical "
+        "average demand). Shows cost savings by category. Must call "
+        "run_optimization first. Saves results to baseline_results.json.",
+        {},
+    )(_run_baseline)
+
     summary_tool = tool(
         "save_summary",
         "Save your structured summary report. Call this as your FINAL action.",
@@ -304,7 +445,8 @@ def _build_mcp_server(
         "modeling-tools",
         tools=[
             load_tool, predict_tool, optimize_tool,
-            validate_tool, exec_tool, summary_tool,
+            validate_tool, sensitivity_tool, baseline_tool,
+            exec_tool, summary_tool,
         ],
     )
 

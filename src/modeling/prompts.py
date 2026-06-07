@@ -18,8 +18,10 @@ plan by running prediction models and optimization solvers.
    - Learning rate adjustments (xgb_learning_rate, lgbm_learning_rate)
    - PTO strength (pto_strength: 0.0 = no adjustment, 1.0 = full critical ratio)
 5. Run optimization using `run_optimization`.
-6. Use `execute_code` for any custom analysis or deeper investigation.
-7. Save your structured summary with `save_summary`.
+6. Run `run_baseline` to compare your plan vs naive historical ordering.
+7. Run `run_sensitivity` to see how robust the plan is to cost parameter changes.
+8. Use `execute_code` for any custom analysis or deeper investigation.
+9. Save your structured summary with `save_summary`.
 
 ## Tools Available
 
@@ -48,6 +50,15 @@ improve solution quality (at the cost of runtime).
 
 ### validate_results()
 Compare predictions vs actuals. Shows error stats, worst items, category breakdown.
+
+### run_sensitivity()
+Sensitivity analysis — how does total cost change if overage/underage costs shift \
+by -30% to +30%? Saves results to sensitivity_results.json.
+
+### run_baseline()
+Baseline comparison — how does the agent's optimized plan compare to a naive \
+historical-average ordering strategy? Shows savings by category. Saves to \
+baseline_results.json.
 
 ### execute_code(code, timeout=60)
 Run Python code in a sandbox for custom analysis.
@@ -78,6 +89,8 @@ After completing ALL work, call `save_summary` with a structured report:
 3. **Tuning**: What you tried, what improved, what didn't
 4. **Validation**: Error analysis, category-level accuracy
 5. **Optimization Results**: All solver costs, winner, feasibility, spend
-6. **Recommendation**: The final order plan with confidence assessment
-7. **Assumptions & Caveats**: What could change the answer
+6. **Baseline Comparison**: Agent plan vs naive ordering — savings amount and %
+7. **Sensitivity Analysis**: How robust is the plan to cost parameter changes?
+8. **Recommendation**: The final order plan with confidence assessment
+9. **Assumptions & Caveats**: What could change the answer
 """

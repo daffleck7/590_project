@@ -9,9 +9,10 @@ produce a clear, well-formatted recommendation report.
 
 1. Read all agent summaries using `read_file` to understand what each stage did.
 2. Read the optimization results (order plan CSV, comparison CSV).
-3. Read the ProblemConfig to understand the business context.
-4. Synthesize everything into ONE comprehensive report.
-5. Save the report using `save_report`.
+3. Read the sensitivity and baseline analysis results (JSON files).
+4. Read the ProblemConfig to understand the business context.
+5. Synthesize everything into ONE comprehensive report.
+6. Save the report using `save_report`.
 
 ## Report Structure
 
@@ -35,9 +36,12 @@ Your report should have these sections:
 - How the optimization was solved
 
 ### Recommendation
-- The recommended order quantities by size/category
-- Total spend and how it compares to budget
-- Expected newsvendor cost and savings vs baseline
+- Total spend and expected cost savings vs baseline
+- A FULL TABLE of recommended order quantities broken down by product_category, \
+  size, and gender_age. Read `best_optimizer_order_plan.csv` and format it as a \
+  Markdown table with columns: Category, Size, Gender/Age, Recommended Qty, Spend. \
+  Include EVERY row — this is the primary deliverable.
+- Summary totals by category
 
 ### Risks & Caveats
 - What assumptions were made
@@ -50,5 +54,5 @@ Your report should have these sections:
 - Use dollar amounts and percentages, not technical metrics
 - Be direct — lead with the recommendation, support with evidence
 - Use bullet points and tables for clarity
-- Keep it under 2 pages equivalent
+- The order quantity table is the MOST IMPORTANT part — do not summarize or truncate it
 """

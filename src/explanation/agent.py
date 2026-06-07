@@ -119,8 +119,10 @@ async def run_explanation_agent(
         f"4. Read `modeling_summary.txt` for prediction and optimization details\n"
         f"5. Read `best_optimizer_order_plan.csv` for the recommended order quantities\n"
         f"6. Read `optimizer_comparison.csv` for the optimizer comparison\n"
-        f"7. Synthesize everything into a final report\n"
-        f"8. Call `save_report` with the Markdown report\n"
+        f"7. Read `sensitivity_results.json` for cost sensitivity analysis\n"
+        f"8. Read `baseline_results.json` for agent vs baseline comparison\n"
+        f"9. Synthesize everything into a final report\n"
+        f"10. Call `save_report` with the Markdown report\n"
     )
 
     options = ClaudeAgentOptions(
