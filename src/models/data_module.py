@@ -209,6 +209,41 @@ class DataModule:
         # --- Month extracted ---
         df["order_month"] = df["order_date"].dt.month
 
+        # --- Historical demand anchors for stronger prediction ---
+        # Same product/size/season in the prior year
+        hist_year = (
+            df.groupby(["product_category", "size", "season", "year"], observed=True)["quantity"]
+            .mean()
+            .reset_index()
+            .rename(columns={"quantity": "avg_qty_year"})
+        )
+        hist_prev = hist_year.copy()
+        hist_prev["year"] = hist_prev["year"] + 1
+        df = df.merge(hist_prev, on=["product_category", "size", "season", "year"], how="left")
+
+        # Category/season baseline for similar items
+        cat_season = (
+            df.groupby(["product_category", "season", "size_group"], observed=True)["quantity"]
+            .mean()
+            .reset_index()
+            .rename(columns={"quantity": "avg_qty_cat_season"})
+        )
+        df = df.merge(cat_season, on=["product_category", "season", "size_group"], how="left")
+
+        # Uniform-set baseline for the same collection type
+        uniform_season = (
+            df.groupby(["uniform_set", "season"], observed=True)["quantity"]
+            .mean()
+            .reset_index()
+            .rename(columns={"quantity": "avg_qty_uniform_season"})
+        )
+        df = df.merge(uniform_season, on=["uniform_set", "season"], how="left")
+
+        # Fill any missing historical anchors with simple global averages
+        df["avg_qty_year"] = df["avg_qty_year"].fillna(df["quantity"].mean())
+        df["avg_qty_cat_season"] = df["avg_qty_cat_season"].fillna(df["quantity"].mean())
+        df["avg_qty_uniform_season"] = df["avg_qty_uniform_season"].fillna(df["quantity"].mean())
+
         return df
 
     def _aggregate_demand(self, df: pd.DataFrame) -> pd.DataFrame:
@@ -262,6 +297,7 @@ class DataModule:
         feature_cols = [
             "size_rank", "season_num", "lifecycle_year",
             "year_idx", "order_month",
+            "avg_qty_year", "avg_qty_cat_season", "avg_qty_uniform_season",
             "is_youth", "is_women",
             "is_top", "is_bottom", "is_socks",
         ]

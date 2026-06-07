@@ -6,6 +6,22 @@ Build an AI-powered agent that converts a natural language business problem desc
 
 This design implements the **Agent = Model + Harness** framework from the course. The FastAPI backend serves as the harness — orchestrating the pipeline, managing verification loops, enforcing guardrails, and writing execution traces.
 
+### Current implementation status
+
+The design in this document describes the intended end state of the project, but the repository currently contains two runnable pieces:
+
+1. **Intake + data-cleaning flow** via the CLI and FastAPI web interface.
+2. **Prediction + optimizer comparison demo** using the cleaned dataset in `data/cleaned_orders.csv`.
+
+The full LLM-driven intake → prediction → optimizer → explanation loop is still the target architecture, while the present codebase already demonstrates the core prediction/optimization logic and the harness scaffolding.
+
+### Suggested review focus
+
+For the next improvement cycle, prioritize:
+- wiring the prediction/optimization demo into the same user-facing flow as the web UI,
+- documenting the current run path for new teammates,
+- keeping the architecture diagram aligned with what is already implemented.
+
 ---
 
 ## Architecture
@@ -165,7 +181,9 @@ This is what makes the **stakeholder modification** easy — the instructor chan
 
 ## Web UI
 
-FastAPI backend + lightweight frontend. Pages:
+FastAPI backend + lightweight frontend. In the current repository, the browser interface is the best way to explore the early harness flow (upload, intake, and data-cleaning trace). The full prediction/optimizer dashboard is still planned as the next major integration step.
+
+Pages:
 
 ### Problem Input Page
 - Text box for natural language problem description
@@ -194,6 +212,24 @@ FastAPI backend + lightweight frontend. Pages:
 - Expandable log of what the agent did at each step
 - Click into any step to see inputs, outputs, errors
 - Token usage and timing summary
+
+### Current execution map
+
+The repository currently supports three practical execution paths:
+
+1. **Browser UI (FastAPI)**
+   - Run: `uv run uvicorn src.web.app:app --host 127.0.0.1 --port 8000`
+   - Open: `http://127.0.0.1:8000`
+   - Use this for the interactive intake / upload / trace workflow.
+
+2. **CLI intake + cleaning flow**
+   - Run: `uv run python -m src data/orders.csv`
+   - Optional description: `uv run python -m src data/orders.csv --description "Optimize uniform ordering..."`
+   - This exercises the current harness path in the terminal.
+
+3. **Prediction + optimizer comparison demo**
+   - Run from `src/models/`: `uv run python -c 'from all_optimizers_combined_final import run_full_comparison; run_full_comparison(csv_path="../../data/cleaned_orders.csv", project_folder=".")'`
+   - This is the current verified end-to-end prediction/optimization example using the cleaned dataset.
 
 ---
 

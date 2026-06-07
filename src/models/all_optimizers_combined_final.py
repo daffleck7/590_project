@@ -277,6 +277,25 @@ def build_order_plan(df: pd.DataFrame, q: np.ndarray, scenarios: np.ndarray) -> 
     return plan
 
 
+def make_starts(q0: np.ndarray, scenarios: np.ndarray, n_restarts: int, random_state: int = 42) -> list[np.ndarray]:
+    """Create diverse deterministic starting points for the optimizer search."""
+    mean = np.asarray(scenarios.mean(axis=0), dtype=float)
+    median = np.asarray(np.median(scenarios, axis=0), dtype=float)
+    starts = [q0, mean, median, scenarios[0], scenarios[-1]]
+
+    # Add a small family of scaled starts around the mean to escape local minima.
+    for scale in (0.75, 0.9, 1.05, 1.15):
+        starts.append(scale * mean)
+
+    # If requested, extend with a few evenly spaced scenario blends.
+    if n_restarts > len(starts):
+        for i in range(len(starts), n_restarts):
+            alpha = (i + 1) / max(1, n_restarts)
+            starts.append((1.0 - alpha) * mean + alpha * median)
+
+    return [np.maximum(np.asarray(x, dtype=float), 0.0) for x in starts[: max(1, n_restarts)]]
+
+
 def make_result(method, q, df, scenarios, budget, runtime, iterations, success=True, message="OK", metadata=None):
     max_violation, violations = budget_diagnostics(q, df, budget)
     plan = build_order_plan(df, q, scenarios)
@@ -300,10 +319,9 @@ def make_result(method, q, df, scenarios, budget, runtime, iterations, success=T
 # Optimizer 1: SLSQP
 # =============================================================================
 
-def optimize_with_slsqp(prediction_result, config, n_restarts=15, random_state=42):
+def optimize_with_slsqp(prediction_result, config, n_restarts=20, random_state=42):
     """SLSQP directly handles nonlinear objective, bounds, and season budget constraints."""
     df, scenarios, budget, moq, q0 = prepare_optimization_inputs(prediction_result, config)
-    rng = np.random.default_rng(random_state)
     n = len(df)
     unit_cost = df["unit_cost"].to_numpy(dtype=float)
     seasons = sorted(df["season"].unique())
@@ -317,11 +335,7 @@ def optimize_with_slsqp(prediction_result, config, n_restarts=15, random_state=4
             "fun": lambda q, mask=mask: budget - float(np.sum(unit_cost[mask] * q[mask])),
         })
 
-    starts = [q0, scenarios[1], scenarios.mean(axis=0)]
-    for _ in range(max(0, n_restarts - len(starts))):
-        w = rng.dirichlet(np.ones(scenarios.shape[0]))
-        starts.append(w @ scenarios)
-    starts = [np.maximum(s, moq) for s in starts]
+    starts = [np.maximum(s, moq) for s in make_starts(q0, scenarios, n_restarts, random_state=random_state)]
 
     start_time = time.time()
     best = None
@@ -368,6 +382,7 @@ def make_starts(q0: np.ndarray, scenarios: np.ndarray, n_restarts: int, random_s
 
 def optimize_with_lbfgsb(prediction_result, config, penalty_weight=20_000.0, n_restarts=20, random_state=42):
     """L-BFGS-B with multi-start restarts and penalty-based budget handling."""
+
     df, scenarios, budget, moq, q0 = prepare_optimization_inputs(prediction_result, config)
     bounds = [(moq, None) for _ in range(len(df))]
 
@@ -528,6 +543,52 @@ def optimize_with_adam(
 
 
 # =============================================================================
+# Optimizer 6: COBYLA (robust derivative-free fallback)
+# =============================================================================
+
+def optimize_with_cobyla(prediction_result, config, n_restarts=4, random_state=42):
+    """COBYLA is a derivative-free fallback that improves feasibility on noisy objectives without a long search budget."""
+    df, scenarios, budget, moq, q0 = prepare_optimization_inputs(prediction_result, config)
+    unit_cost = df["unit_cost"].to_numpy(dtype=float)
+    seasons = sorted(df["season"].unique())
+
+    constraints = []
+    for season in seasons:
+        mask = (df["season"] == season).to_numpy()
+        constraints.append({"type": "ineq", "fun": lambda q, mask=mask: budget - float(np.sum(unit_cost[mask] * q[mask]))})
+
+    starts = [np.maximum(s, moq) for s in make_starts(q0, scenarios, n_restarts, random_state=random_state)]
+    start_time = time.time()
+    best_res = None
+    best_obj = np.inf
+
+    for x0 in starts:
+        x0 = project_to_season_budget(x0, df, budget, moq)
+        res = minimize(
+            fun=lambda q: saa_objective(q, scenarios, df),
+            x0=x0,
+            method="COBYLA",
+            constraints=constraints,
+            options={"maxiter": 400, "rhobeg": 0.5, "tol": 1e-5},
+        )
+
+        candidate = project_to_season_budget(res.x, df, budget, moq)
+        candidate_obj = saa_objective(candidate, scenarios, df)
+        if candidate_obj < best_obj:
+            best_obj = candidate_obj
+            best_res = res
+
+    q = round_and_repair(project_to_season_budget(best_res.x, df, budget, moq), df, scenarios, budget, moq)
+    runtime = time.time() - start_time
+
+    return make_result(
+        "COBYLA", q, df, scenarios, budget, runtime,
+        getattr(best_res, "nit", -1), bool(best_res.success), str(best_res.message),
+        {"n_restarts": n_restarts},
+    )
+
+
+# =============================================================================
 # Comparison runner
 # =============================================================================
 
@@ -536,7 +597,7 @@ def compare_optimizers(prediction_result, config):
     results = []
 
     print("\nRunning SLSQP...")
-    results.append(optimize_with_slsqp(prediction_result, config, n_restarts=15))
+    results.append(optimize_with_slsqp(prediction_result, config, n_restarts=20))
     print(results[-1].summary())
 
     print("\nRunning L-BFGS-B...")
@@ -553,6 +614,10 @@ def compare_optimizers(prediction_result, config):
 
     print("\nRunning Adam...")
     results.append(optimize_with_adam(prediction_result, config))
+    print(results[-1].summary())
+
+    print("\nRunning COBYLA...")
+    results.append(optimize_with_cobyla(prediction_result, config))
     print(results[-1].summary())
 
     comparison = pd.DataFrame([

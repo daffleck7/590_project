@@ -28,6 +28,7 @@ from scipy.stats import norm
 from sklearn.metrics import mean_squared_error
 from sklearn.preprocessing import StandardScaler
 from sklearn.linear_model import Ridge
+from sklearn.ensemble import HistGradientBoostingRegressor
 from xgboost import XGBRegressor
 from lightgbm import LGBMRegressor
 
@@ -78,33 +79,39 @@ class PredictionModule:
 
         baseline_preds, baseline_cost = self._baseline(dtr, dte)
 
-        model_xgb,  pred_xgb,   cost_xgb   = self._model_xgboost(Xtr, ytr, Xte, dte)
-        model_lgbm, pred_lgbm,  cost_lgbm  = self._model_lightgbm(Xtr, ytr, Xte, dte)
-        _,          pred_ridge, cost_ridge  = self._model_ridge(Xtr, ytr, Xte, dte)
+        model_xgb,      pred_xgb,      cost_xgb      = self._model_xgboost(Xtr, ytr, Xte, dte)
+        model_lgbm,     pred_lgbm,     cost_lgbm     = self._model_lightgbm(Xtr, ytr, Xte, dte)
+        model_histgb,   pred_histgb,   cost_histgb   = self._model_histgb(Xtr, ytr, Xte, dte)
+        _,              pred_ridge,    cost_ridge    = self._model_ridge(Xtr, ytr, Xte, dte)
 
-        pred_xgb_adj,   cost_xgb_adj   = self._pto_adjust(pred_xgb,   dte)
-        pred_lgbm_adj,  cost_lgbm_adj  = self._pto_adjust(pred_lgbm,  dte)
-        pred_ridge_adj, cost_ridge_adj = self._pto_adjust(pred_ridge,  dte)
+        pred_xgb_adj,    cost_xgb_adj    = self._pto_adjust(pred_xgb,    dte)
+        pred_lgbm_adj,   cost_lgbm_adj   = self._pto_adjust(pred_lgbm,   dte)
+        pred_histgb_adj, cost_histgb_adj = self._pto_adjust(pred_histgb, dte)
+        pred_ridge_adj,  cost_ridge_adj  = self._pto_adjust(pred_ridge,  dte)
 
         sigma_cat = self._compute_sigma(dtr, model_xgb, Xtr)
 
         all_costs = {
-            "Baseline":           baseline_cost,
-            "XGBoost":            cost_xgb,
-            "XGBoost+PTO":        cost_xgb_adj,
-            "LightGBM":           cost_lgbm,
-            "LightGBM+PTO":       cost_lgbm_adj,
-            "Ridge":              cost_ridge,
-            "Ridge+PTO":          cost_ridge_adj,
+            "Baseline":            baseline_cost,
+            "XGBoost":             cost_xgb,
+            "XGBoost+PTO":         cost_xgb_adj,
+            "LightGBM":            cost_lgbm,
+            "LightGBM+PTO":        cost_lgbm_adj,
+            "HistGB":              cost_histgb,
+            "HistGB+PTO":          cost_histgb_adj,
+            "Ridge":               cost_ridge,
+            "Ridge+PTO":           cost_ridge_adj,
         }
 
         model_preds = {
-            "XGBoost":      pred_xgb,
-            "XGBoost+PTO":  pred_xgb_adj,
-            "LightGBM":     pred_lgbm,
-            "LightGBM+PTO": pred_lgbm_adj,
-            "Ridge":        pred_ridge,
-            "Ridge+PTO":    pred_ridge_adj,
+            "XGBoost":             pred_xgb,
+            "XGBoost+PTO":         pred_xgb_adj,
+            "LightGBM":            pred_lgbm,
+            "LightGBM+PTO":        pred_lgbm_adj,
+            "HistGB":              pred_histgb,
+            "HistGB+PTO":          pred_histgb_adj,
+            "Ridge":               pred_ridge,
+            "Ridge+PTO":           pred_ridge_adj,
         }
 
         best_name  = min(model_preds, key=lambda x: all_costs[x])
@@ -169,6 +176,18 @@ class PredictionModule:
     def _model_lightgbm(self, Xtr, ytr, Xte, dte):
         m = LGBMRegressor(n_estimators=300,max_depth=4,learning_rate=0.05,subsample=0.8,random_state=42,verbose=-1)
         m.fit(Xtr, ytr); p = np.maximum(m.predict(Xte), 0)
+        return m, p, self._total_nv_cost(p, dte)
+
+    def _model_histgb(self, Xtr, ytr, Xte, dte):
+        m = HistGradientBoostingRegressor(
+            learning_rate=0.05,
+            max_depth=6,
+            max_iter=300,
+            random_state=42,
+            l2_regularization=0.05,
+        )
+        m.fit(Xtr, ytr)
+        p = np.maximum(m.predict(Xte), 0)
         return m, p, self._total_nv_cost(p, dte)
 
     def _model_ridge(self, Xtr, ytr, Xte, dte):
