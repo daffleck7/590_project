@@ -488,12 +488,25 @@ async def run_modeling_agent(
         f"Your run directory for outputs is: {run_dir}\n\n"
         f"## ProblemConfig\n\n"
         f"```json\n{config.model_dump_json(indent=2)}\n```\n\n"
+        f"## IMPORTANT: Read the problem_description field above carefully.\n"
+        f"It tells you what the backtest should look like (which years to train on, "
+        f"which to test on). Verify that data_requirements.train_years and "
+        f"test_years match before running any models.\n\n"
         f"## Steps\n\n"
-        f"1. Call `load_data` with cleaned_csv_path=\"{cleaned_csv_path}\"\n"
-        f"2. Call `run_prediction` to train models and find the best one\n"
-        f"3. Call `run_optimization` to find the best solver\n"
-        f"4. Analyze the results — use `execute_code` if you need to dig deeper\n"
-        f"5. Call `save_summary` with your structured report\n"
+        f"1. FIRST: Use `execute_code` to inspect the cleaned CSV — check columns, "
+        f"row counts, unique values for key fields. Verify the data matches what "
+        f"the problem description expects.\n"
+        f"2. Check the groupby_keys: load the data and see how many demand groups "
+        f"they produce. If it's >200 groups, investigate whether some keys are "
+        f"redundant and should be removed.\n"
+        f"3. Check if derived features are needed (e.g., if cost_structure has "
+        f"period=1 and period=2 entries, the data needs a lifecycle/period column).\n"
+        f"4. If you find issues, fix them with execute_code and write a corrected "
+        f"CSV. Then call `load_data` with the corrected path.\n"
+        f"5. Call `run_prediction`, then `validate_results`.\n"
+        f"6. If errors are very high, investigate the DATA first (not hyperparams).\n"
+        f"7. Call `run_optimization`, `run_baseline`, `run_sensitivity`.\n"
+        f"8. Call `save_summary` with your structured report.\n"
     )
 
     options = ClaudeAgentOptions(
@@ -501,7 +514,7 @@ async def run_modeling_agent(
         mcp_servers={"modeling": mcp_server},
         allowed_tools=[],
         permission_mode="bypassPermissions",
-        max_turns=20,
+        max_turns=30,
     )
 
     async with ClaudeSDKClient(options=options) as client:
