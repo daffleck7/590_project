@@ -19,7 +19,6 @@ from claude_agent_sdk import (
 
 from src.data_ingestion.prompts import DATA_CLEANING_SYSTEM_PROMPT
 from src.data_ingestion.sandbox import execute_code, verify_no_fabrication, verify_type_consistency
-from src.data_ingestion.tools import run_cfa_cleaning
 from src.intake.tools import describe_column, peek_columns, sample_rows
 from src.models.problem_config import ProblemConfig
 
@@ -43,9 +42,6 @@ def _build_mcp_server(csv_path: str, output_dir: str):
     async def _describe(args: dict) -> dict:
         return {"content": [{"type": "text", "text": describe_column(args["csv_path"], args["column"])}]}
 
-    async def _cfa_clean(args: dict) -> dict:
-        return {"content": [{"type": "text", "text": run_cfa_cleaning(args["csv_path"], args["output_dir"])}]}
-
     peek_tool = tool(
         "peek_columns",
         "Return column names and dtypes from a CSV file",
@@ -63,12 +59,6 @@ def _build_mcp_server(csv_path: str, output_dir: str):
         "Return summary statistics for a single CSV column",
         {"csv_path": str, "column": str},
     )(_describe)
-
-    cfa_tool = tool(
-        "run_cfa_cleaning",
-        "Run the CFA-specific cleaning pipeline on Squarespace order data",
-        {"csv_path": str, "output_dir": str},
-    )(_cfa_clean)
 
     async def _execute_code_handler(args: dict) -> dict:
         work_dir = Path(output_dir)
@@ -104,7 +94,7 @@ def _build_mcp_server(csv_path: str, output_dir: str):
 
     return create_sdk_mcp_server(
         "data-cleaning-tools",
-        tools=[peek_tool, sample_tool, describe_tool, cfa_tool, exec_tool, summary_tool],
+        tools=[peek_tool, sample_tool, describe_tool, exec_tool, summary_tool],
     )
 
 

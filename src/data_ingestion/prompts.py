@@ -24,7 +24,6 @@ provided in the opening message.
 - peek_columns(csv_path) -> column names and dtypes
 - sample_rows(csv_path, n=10) -> first N rows as a table
 - describe_column(csv_path, column) -> stats for one column
-- run_cfa_cleaning(csv_path, output_dir) -> runs the CFA-specific cleaner, saves to output_dir/cfa_cleaned.csv
 - execute_code(code, timeout=30) -> runs Python code in a sandbox, returns stdout/stderr
 - save_summary(summary) -> saves your summary report for the user to review
 
@@ -38,17 +37,11 @@ provided in the opening message.
 - If a cleaning step drops more than 50% of rows, print a warning and explain why.
 - After writing the final CSV, call peek_columns on the output path to confirm it looks right.
 
-## When to Use run_cfa_cleaning
-
-If the data looks like a Squarespace order export with columns like "Lineitem name", \
-"Lineitem variant", "Financial Status" — this is CFA uniform data. Call run_cfa_cleaning \
-first for the base cleaning, then do additional transformations on top.
-
 ## Output Requirements
 
 Your final output must be a CSV with:
 - All columns specified in data_requirements.required_columns
-- No duplicate rows (unless duplicates are meaningful)
+- No duplicate rows (unless duplicates are meaningful — e.g. distinct orders)
 - Consistent dtypes (numbers as numbers, dates as dates)
 - A printed summary of the final dataset (row count, columns, null counts)
 

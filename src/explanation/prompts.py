@@ -37,10 +37,10 @@ Your report should have these sections:
 
 ### Recommendation
 - Total spend and expected cost savings vs baseline
-- A FULL TABLE of recommended order quantities broken down by product_category, \
-  size, and gender_age. Read `best_optimizer_order_plan.csv` and format it as a \
-  Markdown table with columns: Category, Size, Gender/Age, Recommended Qty, Spend. \
-  Include EVERY row — this is the primary deliverable.
+- A FULL TABLE of recommended order quantities. Read `best_optimizer_order_plan.csv` \
+  and format it as a Markdown table showing every row with the key grouping columns \
+  and the recommended quantity and spend. Include EVERY row — this is the primary \
+  deliverable.
 - Summary totals by category
 
 ### Risks & Caveats

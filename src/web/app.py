@@ -12,7 +12,8 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from sse_starlette.sse import EventSourceResponse
 
-from src.models.problem_config import ProblemConfig, build_cfa_default_config
+from src.models.problem_config import ProblemConfig
+from src.models.templates import build_cfa_default_config
 from src.orchestrator import Orchestrator, create_run_directory, save_trace
 
 DEFAULT_CSV = Path("data/orders.csv")
@@ -72,14 +73,17 @@ async def skip_intake(request: Request) -> JSONResponse:
     config_path = Path(run_dir) / "problem_config.json"
     config_path.write_text(config.model_dump_json(indent=2))
 
-    asyncio.create_task(_run_cleaning(run_id))
+    asyncio.create_task(_run_pipeline(run_id))
 
     return JSONResponse({"run_id": run_id, "stream": f"/chat/stream?run_id={run_id}"})
 
 
 @app.post("/upload")
-async def upload_csv(file: UploadFile = File(...)) -> JSONResponse:
-    """Upload a CSV file and create a new run."""
+async def upload_csv(
+    file: UploadFile = File(...),
+    description_file: UploadFile | None = File(None),
+) -> JSONResponse:
+    """Upload a CSV file and optional problem description file."""
     if not file.filename or not file.filename.endswith(".csv"):
         return JSONResponse({"error": "Please upload a CSV file"}, status_code=400)
 
@@ -89,6 +93,16 @@ async def upload_csv(file: UploadFile = File(...)) -> JSONResponse:
     csv_path = Path(run_dir) / "upload.csv"
     content = await file.read()
     csv_path.write_bytes(content)
+
+    # Save optional problem description file
+    has_description = False
+    desc_filename = ""
+    if description_file and description_file.filename:
+        desc_content = await description_file.read()
+        desc_path = Path(run_dir) / f"problem_description{Path(description_file.filename).suffix}"
+        desc_path.write_bytes(desc_content)
+        has_description = True
+        desc_filename = description_file.filename
 
     event_queue: asyncio.Queue = asyncio.Queue()
 
@@ -104,6 +118,8 @@ async def upload_csv(file: UploadFile = File(...)) -> JSONResponse:
         "run_id": run_id,
         "filename": file.filename,
         "size": len(content),
+        "has_description": has_description,
+        "description_filename": desc_filename,
     })
 
 

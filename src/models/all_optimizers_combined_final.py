@@ -36,11 +36,13 @@ import pandas as pd
 from scipy.optimize import minimize
 
 try:
-    from src.models.problem_config import build_cfa_default_config, get_cost, get_budget, get_moq
+    from src.models.problem_config import get_cost, get_budget, get_moq
+    from src.models.templates import build_cfa_default_config
     from src.models.data_module import DataModule
     from src.models.prediction_module import add_prediction
 except ImportError:
-    from problem_config import build_cfa_default_config, get_cost, get_budget, get_moq
+    from problem_config import get_cost, get_budget, get_moq
+    from templates import build_cfa_default_config
     from data_module import DataModule
     from prediction_module import add_prediction
 
@@ -78,18 +80,31 @@ class OptimizerResult:
 def prepare_optimization_inputs(prediction_result, config):
     """Create common dataframe and arrays used by every optimizer."""
     df = prediction_result.demand_df.copy().reset_index(drop=True)
-    df["lifecycle_year"] = df["lifecycle_year"].astype(int)
+
+    # Get period column if it exists (e.g. lifecycle_year), default to None
+    has_period = "lifecycle_year" in df.columns
+    if has_period:
+        df["lifecycle_year"] = df["lifecycle_year"].astype(int)
+
+    # Get category column if it exists
+    has_category = "product_category" in df.columns
+
+    def _get_cat(row):
+        return row.product_category if has_category else None
+
+    def _get_period(row):
+        return int(row.lifecycle_year) if has_period else None
 
     df["unit_cost"] = [
-        get_cost(config, r.product_category, "unit_cost", int(r.lifecycle_year))
+        get_cost(config, _get_cat(r), "unit_cost", _get_period(r))
         for r in df.itertuples(index=False)
     ]
     df["overage_cost"] = [
-        get_cost(config, r.product_category, "overage_cost", int(r.lifecycle_year))
+        get_cost(config, _get_cat(r), "overage_cost", _get_period(r))
         for r in df.itertuples(index=False)
     ]
     df["underage_cost"] = [
-        get_cost(config, r.product_category, "underage_cost", int(r.lifecycle_year))
+        get_cost(config, _get_cat(r), "underage_cost", _get_period(r))
         for r in df.itertuples(index=False)
     ]
 

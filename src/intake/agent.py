@@ -213,6 +213,18 @@ async def run_intake_agent(
     mcp_server = _build_mcp_server(run_dir)
     usage_log: list[dict] = []
 
+    # Check for a problem description file in the run directory
+    desc_file_content = None
+    run_path = Path(run_dir)
+    for ext in [".txt", ".md", ".pdf"]:
+        desc_path = run_path / f"problem_description{ext}"
+        if desc_path.exists():
+            if ext == ".pdf":
+                desc_file_content = f"[PDF file uploaded at {desc_path} — read it with your tools]"
+            else:
+                desc_file_content = desc_path.read_text(encoding="utf-8", errors="replace")
+            break
+
     prompt = (
         f"## Data File\n\n"
         f"The CSV file you will be working with is at: {csv_path}\n"
@@ -221,14 +233,19 @@ async def run_intake_agent(
         f"Call `peek_columns` with csv_path=\"{csv_path}\" to see what columns are available, "
         f"then call `sample_rows` with the same path to see example data.\n\n"
     )
-    if initial_description:
+    if desc_file_content:
         prompt += (
-            f"## Problem Description\n\n"
-            f"{initial_description}\n\n"
+            f"## Problem Description (from uploaded file)\n\n"
+            f"{desc_file_content}\n\n"
             f"Use this description along with the data to formulate the ProblemConfig. "
             f"Ask follow-up questions for anything that is missing or unclear.\n\n"
         )
-    else:
+    if initial_description:
+        prompt += (
+            f"## Additional Context (from user message)\n\n"
+            f"{initial_description}\n\n"
+        )
+    if not desc_file_content and not initial_description:
         prompt += (
             "## Task\n\n"
             "The user has not provided a problem description yet. Start by inspecting "

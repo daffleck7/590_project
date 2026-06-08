@@ -1,0 +1,41 @@
+UNIFORM ORDERING OPTIMIZATION — CFA Youth Soccer League
+
+BUSINESS CONTEXT
+CFA (Club Futbol Academy) is a youth soccer league in Orange County, California. The league runs four seasonal programs — fall, winter, spring, and a year-round competitive division (CFA). Each season the league president must commit to uniform order quantities before registration demand is observed.
+
+The league processes roughly 2,000–3,000 orders per season through its Squarespace storefront. Uniforms include three product categories: jerseys (tops), shorts (bottoms), and socks. Each category is offered in up to 14 size codes spanning youth, adult men, and women.
+
+CURRENT PROCESS
+Order quantities are currently set by the league president using 25 years of operational intuition. This heuristic produces systematic errors in both directions: overstock ties up capital in inventory children outgrow, while stockouts trigger rush orders with premium shipping and delayed fulfillment.
+
+THE JERSEY LIFECYCLE PROBLEM
+Adidas jersey models (e.g., Condivo 22, Tiro 25) are produced for approximately two years before being discontinued and replaced. This creates a two-period decision structure with escalating costs:
+
+- Year 1 overage: Unused jerseys carry to Year 2 at minimal holding cost.
+- Year 1 underage: Rush orders at the same unit price but with added shipping costs.
+- Year 2 overage: Excess inventory is sold on eBay at a loss (salvage).
+- Year 2 underage: The model is discontinued by Adidas. Secondhand sourcing requires significant premiums, or the sale is lost entirely — unhappy parents and lost revenue.
+
+The current jersey model (Tiro 25) is in Year 2 of its lifecycle — the final year. This makes the problem especially acute: any under-ordering this year cannot be corrected through normal channels.
+
+PROBLEM CLASS
+This is a multi-period, multi-product newsvendor ordering problem. The goal is to minimize total expected cost — combining procurement, holding/salvage (overage), and rush-order/stockout (underage) costs — subject to:
+- A seasonal budget constraint (approximately $8,000 per season)
+- Supplier minimum order quantity of 6 units per size
+- Non-negativity constraints
+
+COST STRUCTURE
+Approximate costs by product category:
+- Tops (jerseys): $25 wholesale, $5/$15 overage (Y1/Y2), $12/$60 underage (Y1/Y2)
+- Bottoms (shorts): $16 wholesale, $3/$8 overage (Y1/Y2), $8/$25 underage (Y1/Y2)
+- Socks: $10 wholesale, $1 overage, $5 underage
+
+The critical ratio (cu / (cu + co)) is approximately 0.30 across categories, meaning the optimal policy orders conservatively — at about the 30th percentile of demand.
+
+DATA AVAILABLE
+Historical order data from 2020–2026, cleaned to 12,209 line items with columns: order_date, season, year, product_category, gender_age, size, quantity, unit_price.
+
+EVALUATION APPROACH
+Backtest mode: train demand models on 2020–2023 data, predict fall 2024 demand, and compare the optimizer's recommended quantities and cost against what was actually ordered. The primary metric is total season newsvendor cost, not prediction accuracy (RMSE).
+
+A 10–15% cost reduction vs. the baseline (historical average ordering) would be practically meaningful, representing hundreds of dollars per season.

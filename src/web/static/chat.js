@@ -11,11 +11,16 @@ const sendBtn = document.getElementById("sendBtn");
 const uploadArea = document.getElementById("uploadArea");
 const fileInput = document.getElementById("fileInput");
 const uploadFilename = document.getElementById("uploadFilename");
+const descUploadArea = document.getElementById("descUploadArea");
+const descFileInput = document.getElementById("descFileInput");
+const descFilename = document.getElementById("descFilename");
 const uploadStatus = document.getElementById("uploadStatus");
 const uploadStatusFile = document.getElementById("uploadStatusFile");
 const btnResults = document.getElementById("btnResults");
 
-/* --- File Upload --- */
+let pendingDescFile = null;
+
+/* --- CSV File Upload --- */
 
 uploadArea.addEventListener("click", () => fileInput.click());
 uploadArea.addEventListener("dragover", (e) => {
@@ -38,6 +43,35 @@ fileInput.addEventListener("change", () => {
     }
 });
 
+/* --- Description File Upload (optional) --- */
+
+descUploadArea.addEventListener("click", () => descFileInput.click());
+descUploadArea.addEventListener("dragover", (e) => {
+    e.preventDefault();
+    descUploadArea.classList.add("dragover");
+});
+descUploadArea.addEventListener("dragleave", () => {
+    descUploadArea.classList.remove("dragover");
+});
+descUploadArea.addEventListener("drop", (e) => {
+    e.preventDefault();
+    descUploadArea.classList.remove("dragover");
+    if (e.dataTransfer.files.length > 0) {
+        handleDescFile(e.dataTransfer.files[0]);
+    }
+});
+descFileInput.addEventListener("change", () => {
+    if (descFileInput.files.length > 0) {
+        handleDescFile(descFileInput.files[0]);
+    }
+});
+
+function handleDescFile(file) {
+    pendingDescFile = file;
+    descFilename.textContent = file.name;
+    descUploadArea.classList.add("uploaded");
+}
+
 async function handleFile(file) {
     if (!file.name.endsWith(".csv")) {
         alert("Please upload a CSV file.");
@@ -49,6 +83,9 @@ async function handleFile(file) {
 
     const formData = new FormData();
     formData.append("file", file);
+    if (pendingDescFile) {
+        formData.append("description_file", pendingDescFile);
+    }
 
     const resp = await fetch("/upload", { method: "POST", body: formData });
     const data = await resp.json();
@@ -68,7 +105,14 @@ async function handleFile(file) {
     sendBtn.disabled = false;
     chatInput.focus();
 
-    addMessage("agent", "File uploaded. Describe your optimization problem, or just say 'go' and I'll start by inspecting the data.");
+    var msg = "File uploaded.";
+    if (data.has_description) {
+        msg += " Problem description loaded from " + data.description_filename + ".";
+        msg += " I'll review it and ask any clarifying questions.";
+    } else {
+        msg += " Describe your optimization problem, or just say 'go' and I'll start by inspecting the data.";
+    }
+    addMessage("agent", msg);
 }
 
 /* --- Chat --- */

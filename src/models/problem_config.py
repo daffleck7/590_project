@@ -1,21 +1,21 @@
 """
 problem_config.py
 =================
-Central data structure for the CFA Uniform Ordering Optimization Agent.
+Central data structure for the optimization agent pipeline.
 Every module in the pipeline reads from this config.
 
 Flow:
   User NL description
-      → Intake Module (LLM call #1) parses into ProblemConfig
-      → User reviews / edits in UI
-      → Data Module, Prediction Module, Optimizer, Explainer all consume this
+      -> Intake Module (LLM call #1) parses into ProblemConfig
+      -> User reviews / edits in UI
+      -> Data Module, Prediction Module, Optimizer, Explainer all consume this
 
 Stakeholder modification = update one field here, re-run pipeline. That's it.
 """
 
 from __future__ import annotations
-from typing import Literal, Optional
-from pydantic import BaseModel, Field, model_validator
+from typing import Optional
+from pydantic import BaseModel, Field
 
 
 # ---------------------------------------------------------------------------
@@ -23,9 +23,9 @@ from pydantic import BaseModel, Field, model_validator
 # ---------------------------------------------------------------------------
 
 class DecisionVariable(BaseModel):
-    """One thing the agent decides — e.g. order quantity for size YM jersey."""
-    name: str = Field(..., description="e.g. 'order_qty_YM_top_fall'")
-    type: Literal["continuous", "integer", "binary"] = "integer"
+    """One thing the agent decides — e.g. order quantity for a specific item."""
+    name: str = Field(..., description="e.g. 'order_qty_item_A'")
+    type: str = Field("integer", description="continuous, integer, or binary")
     lower_bound: float = Field(0.0, description="Minimum allowed value")
     upper_bound: Optional[float] = Field(None, description="None = unbounded")
     unit: str = Field("units", description="e.g. 'units', 'dollars'")
@@ -34,19 +34,19 @@ class DecisionVariable(BaseModel):
 
 class Objective(BaseModel):
     """What we are optimizing."""
-    direction: Literal["minimize", "maximize"] = "minimize"
+    direction: str = Field("minimize", description="minimize or maximize")
     description: str = Field(
         ...,
-        description="Plain English. e.g. 'Minimize total newsvendor cost across all sizes and seasons'"
+        description="Plain English description of the objective"
     )
-    metric_name: str = Field("total_newsvendor_cost", description="Key used in results dict")
+    metric_name: str = Field("total_cost", description="Key used in results dict")
 
 
 class Constraint(BaseModel):
     """One business rule the optimizer must respect."""
     name: str
     description: str
-    type: Literal["hard", "soft"] = "hard"
+    type: str = Field("hard", description="hard or soft")
     parameters: dict = Field(
         default_factory=dict,
         description="Numeric values. e.g. {'budget': 8000, 'currency': 'USD'}"
@@ -55,9 +55,9 @@ class Constraint(BaseModel):
 
 class UncertainParameter(BaseModel):
     """Something we don't know at decision time — needs prediction from data."""
-    name: str = Field(..., description="e.g. 'demand_YM_top_fall_2026'")
+    name: str = Field(..., description="e.g. 'demand_item_A'")
     description: str
-    data_column: str = Field(..., description="Column in cleaned_orders.csv that measures this")
+    data_column: str = Field(..., description="Column in cleaned data that measures this")
     unit: str = "units"
 
 
@@ -67,11 +67,11 @@ class CostItem(BaseModel):
     value: float
     unit: str = "USD/unit"
     description: str = ""
-    lifecycle_year: Optional[Literal[1, 2]] = Field(
+    period: Optional[int] = Field(
         None,
-        description="If cost changes by jersey lifecycle year, specify here. None = applies to all years."
+        description="If cost changes by period (e.g. product lifecycle year), specify here. None = all periods."
     )
-    product_category: Optional[Literal["top", "bottom", "socks"]] = Field(
+    product_category: Optional[str] = Field(
         None,
         description="None = applies to all categories"
     )
@@ -79,20 +79,12 @@ class CostItem(BaseModel):
 
 class DataRequirements(BaseModel):
     """What columns the Data Module must find in the CSV."""
-    required_columns: list[str] = Field(
-        default_factory=lambda: [
-            "order_id", "order_date", "season", "year",
-            "uniform_set", "product_category", "gender_age",
-            "size", "quantity", "unit_price"
-        ]
-    )
+    required_columns: list[str] = Field(default_factory=list)
     target_column: str = "quantity"
     date_column: str = "order_date"
-    train_years: list[int] = Field(default_factory=lambda: [2020, 2021, 2022, 2023, 2024])
-    test_years: list[int] = Field(default_factory=lambda: [2025, 2026])
-    groupby_keys: list[str] = Field(
-        default_factory=lambda: ["year", "season", "uniform_set", "product_category", "size"]
-    )
+    train_years: list[int] = Field(default_factory=list)
+    test_years: list[int] = Field(default_factory=list)
+    groupby_keys: list[str] = Field(default_factory=list)
 
 
 # ---------------------------------------------------------------------------
@@ -114,182 +106,52 @@ class ProblemConfig(BaseModel):
         description="Original natural language input from the user"
     )
     problem_title: str = Field(
-        "CFA Uniform Ordering Optimization",
+        "Optimization Problem",
         description="Short name shown in UI and reports"
     )
 
-    # --- Core schema (from agent-design.md) ---
+    # --- Core schema ---
     decision_variables: list[DecisionVariable] = Field(
         default_factory=list,
-        description="What the agent controls — one per (size, product_category, season)"
+        description="What the agent controls"
     )
     objective: Objective = Field(
         default_factory=lambda: Objective(
             direction="minimize",
-            description=(
-                "Minimize total expected newsvendor cost across all sizes, product categories, "
-                "and seasons — including overage (holding/salvage), underage (rush orders / lost sales), "
-                "and unit procurement costs — subject to budget and MOQ constraints."
-            ),
-            metric_name="total_newsvendor_cost"
+            description="Minimize total expected cost"
         )
     )
     constraints: list[Constraint] = Field(default_factory=list)
     uncertain_parameters: list[UncertainParameter] = Field(
         default_factory=list,
-        description="Demand per size × category × season — predicted by Prediction Module"
+        description="Parameters that need prediction from data"
     )
     cost_structure: list[CostItem] = Field(
         default_factory=list,
-        description="All cost components. co and cu vary by lifecycle year and product."
+        description="All cost components"
     )
     data_requirements: DataRequirements = Field(default_factory=DataRequirements)
     solver_hint: Optional[str] = Field(
-        "multi_product_newsvendor_two_period",
-        description="Tells Optimizer Module which solver pattern to use"
-    )
-
-    # --- CFA-specific fields (not in generic schema, added for our problem) ---
-    lifecycle_year: Optional[Literal[1, 2]] = Field(
         None,
-        description=(
-            "Current jersey lifecycle year. "
-            "Year 1 = Tiro 25 first season (carry-forward possible). "
-            "Year 2 = Tiro 25 last season (discontinuation → high underage penalty)."
-        )
-    )
-    sizes: list[str] = Field(
-        default_factory=lambda: [
-            "YXS", "YS", "YM", "YL", "YXL",   # Youth
-            "AS", "AM", "AL", "AXL",            # Adult men
-            "WXS", "WS", "WM", "WL", "WXL"     # Women
-        ]
-    )
-    product_categories: list[str] = Field(
-        default_factory=lambda: ["top", "bottom", "socks"]
-    )
-    seasons: list[str] = Field(
-        default_factory=lambda: ["fall", "winter", "spring", "cfa"]
+        description="Problem class hint for the optimizer (e.g. 'newsvendor', 'LP', 'knapsack')"
     )
 
-    @model_validator(mode="after")
-    def check_cost_structure_has_both_years(self) -> "ProblemConfig":
-        """
-        Year 2 underage cost must be higher than Year 1.
-        This is the core business insight — discontinued jersey = massive stockout penalty.
-        """
-        year1_cu = [c for c in self.cost_structure if c.name == "underage_cost" and c.lifecycle_year == 1]
-        year2_cu = [c for c in self.cost_structure if c.name == "underage_cost" and c.lifecycle_year == 2]
-        if year1_cu and year2_cu:
-            if year2_cu[0].value <= year1_cu[0].value:
-                raise ValueError(
-                    f"Year 2 underage cost ({year2_cu[0].value}) must be > "
-                    f"Year 1 underage cost ({year1_cu[0].value}). "
-                    "Discontinued jerseys have much higher stockout penalty."
-                )
-        return self
-
-
-# ---------------------------------------------------------------------------
-# CFA Default Config — pre-filled for our exact problem
-# ---------------------------------------------------------------------------
-
-def build_cfa_default_config() -> ProblemConfig:
-    """
-    Returns a fully populated ProblemConfig for the CFA problem.
-    This is what the LLM *should* generate from the NL description.
-    Used as:
-      1. Fallback if LLM output fails validation
-      2. Ground truth for testing Intake Module quality
-      3. Starting point for stakeholder modifications
-    """
-
-    constraints = [
-        Constraint(
-            name="seasonal_budget",
-            description="Total procurement spend per season cannot exceed league budget",
-            type="hard",
-            parameters={"budget_usd": 8000, "note": "Estimated from proposal — update with real budget"}
-        ),
-        Constraint(
-            name="minimum_order_quantity",
-            description="Adidas requires minimum 6 units per size per order",
-            type="hard",
-            parameters={"moq_per_size": 6}
-        ),
-        Constraint(
-            name="non_negativity",
-            description="Cannot order negative units",
-            type="hard",
-            parameters={}
-        ),
-        Constraint(
-            name="carryover_inventory",
-            description="Year 1 unsold stock carries to Year 2 at zero holding cost",
-            type="hard",
-            parameters={"holding_cost_per_unit": 0.0}
-        ),
-    ]
-
-    cost_structure = [
-        # --- Tops (jerseys) ---
-        CostItem(name="unit_cost",      value=25.0,  unit="USD/unit", product_category="top",    description="Adidas wholesale price per jersey"),
-        CostItem(name="overage_cost",   value=5.0,   unit="USD/unit", product_category="top",    lifecycle_year=1, description="Year 1: storage / opportunity cost of unsold jersey"),
-        CostItem(name="overage_cost",   value=15.0,  unit="USD/unit", product_category="top",    lifecycle_year=2, description="Year 2: sold on eBay at loss — salvage discount + fees"),
-        CostItem(name="underage_cost",  value=12.0,  unit="USD/unit", product_category="top",    lifecycle_year=1, description="Year 1: rush order premium + extra shipping"),
-        CostItem(name="underage_cost",  value=60.0,  unit="USD/unit", product_category="top",    lifecycle_year=2, description="Year 2: discontinued model — secondhand premium or lost sale + parent unhappy"),
-
-        # --- Bottoms (shorts) ---
-        CostItem(name="unit_cost",      value=16.0,  unit="USD/unit", product_category="bottom", description="Adidas wholesale shorts price"),
-        CostItem(name="overage_cost",   value=3.0,   unit="USD/unit", product_category="bottom", lifecycle_year=1, description="Low holding cost — shorts not size-critical"),
-        CostItem(name="overage_cost",   value=8.0,   unit="USD/unit", product_category="bottom", lifecycle_year=2, description="Salvage loss on discontinued shorts"),
-        CostItem(name="underage_cost",  value=8.0,   unit="USD/unit", product_category="bottom", lifecycle_year=1, description="Rush order premium for shorts"),
-        CostItem(name="underage_cost",  value=25.0,  unit="USD/unit", product_category="bottom", lifecycle_year=2, description="Discontinued shorts — harder to source"),
-
-        # --- Socks ---
-        CostItem(name="unit_cost",      value=10.0,  unit="USD/unit", product_category="socks",  description="Adidas socks wholesale"),
-        CostItem(name="overage_cost",   value=1.0,   unit="USD/unit", product_category="socks",  description="Socks easy to carry — minimal overage cost"),
-        CostItem(name="underage_cost",  value=5.0,   unit="USD/unit", product_category="socks",  description="Generic socks — easier to source at premium"),
-    ]
-
-    uncertain_parameters = [
-        UncertainParameter(
-            name=f"demand_{size}_{cat}",
-            description=f"Number of {size} {cat} units ordered in the upcoming season",
-            data_column="quantity",
-            unit="units"
-        )
-        for cat in ["top", "bottom", "socks"]
-        for size in ["YXS", "YS", "YM", "YL", "YXL", "AS", "AM", "AL", "AXL", "WXS", "WS", "WM", "WL", "WXL"]
-    ]
-
-    return ProblemConfig(
-        problem_description=(
-            "CFA youth soccer league in Orange County processes 2,000–3,000 uniform orders per season "
-            "across jerseys, shorts, and socks in 14 size codes. Orders must be placed before demand is "
-            "realized. The current Adidas jersey model (Tiro 25) is in its final lifecycle year — unsold "
-            "inventory cannot be reordered next season. Minimize total cost across overage, underage, and "
-            "procurement subject to a seasonal budget and supplier minimum order quantities."
-        ),
-        problem_title="CFA Uniform Ordering Optimization — Tiro 25 Year 2",
-        objective=Objective(
-            direction="minimize",
-            description=(
-                "Minimize total expected newsvendor cost across all 14 sizes × 3 product categories × "
-                "upcoming seasons — weighted by lifecycle year cost structure (Year 2 underage penalty "
-                "is ~5x higher than Year 1 due to jersey discontinuation)."
-            ),
-            metric_name="total_newsvendor_cost"
-        ),
-        constraints=constraints,
-        uncertain_parameters=uncertain_parameters,
-        cost_structure=cost_structure,
-        solver_hint="multi_product_newsvendor_two_period",
-        lifecycle_year=2,
-        data_requirements=DataRequirements(
-            train_years=[2020, 2021, 2022, 2023, 2024],
-            test_years=[2025, 2026],
-        )
+    # --- Domain-specific metadata (populated by the intake agent from data) ---
+    item_categories: list[str] = Field(
+        default_factory=list,
+        description="Product categories found in the data (e.g. ['jersey', 'shorts', 'socks'])"
+    )
+    item_sizes: list[str] = Field(
+        default_factory=list,
+        description="Item sizes/variants found in the data"
+    )
+    time_periods: list[str] = Field(
+        default_factory=list,
+        description="Time periods in the data (e.g. seasons, months, quarters)"
+    )
+    custom_fields: dict = Field(
+        default_factory=dict,
+        description="Any additional domain-specific metadata"
     )
 
 
@@ -298,25 +160,30 @@ def build_cfa_default_config() -> ProblemConfig:
 # ---------------------------------------------------------------------------
 
 def get_cost(config: ProblemConfig, category: str, cost_name: str,
-             lifecycle_year: Optional[int] = None) -> float:
-    """
-    Look up a cost value from config.cost_structure.
+             period: Optional[int] = None) -> float:
+    """Look up a cost value from config.cost_structure.
+
     Falls back to category-agnostic cost if category-specific not found.
 
-    Usage:
-        co = get_cost(config, "top", "overage_cost", lifecycle_year=2)
-        cu = get_cost(config, "top", "underage_cost", lifecycle_year=2)
+    Args:
+        config: ProblemConfig with cost_structure.
+        category: Product category to match.
+        cost_name: Cost type name (e.g. 'overage_cost', 'unit_cost').
+        period: Optional period number (e.g. lifecycle year).
+
+    Returns:
+        The cost value.
     """
-    # Try exact match first (category + lifecycle_year)
+    # Try exact match first (category + period)
     for item in config.cost_structure:
         if (item.name == cost_name
                 and item.product_category == category
-                and item.lifecycle_year == lifecycle_year):
+                and item.period == period):
             return item.value
 
-    # Fall back to category match without lifecycle_year filter
+    # Fall back to category match without period filter
     for item in config.cost_structure:
-        if item.name == cost_name and item.product_category == category and item.lifecycle_year is None:
+        if item.name == cost_name and item.product_category == category and item.period is None:
             return item.value
 
     # Fall back to any match on cost_name
@@ -324,20 +191,24 @@ def get_cost(config: ProblemConfig, category: str, cost_name: str,
         if item.name == cost_name:
             return item.value
 
-    raise KeyError(f"Cost '{cost_name}' not found for category='{category}', lifecycle_year={lifecycle_year}")
+    raise KeyError(f"Cost '{cost_name}' not found for category='{category}', period={period}")
 
 
 def get_budget(config: ProblemConfig) -> float:
-    """Extract seasonal budget from constraints."""
+    """Extract budget from constraints."""
     for c in config.constraints:
-        if c.name == "seasonal_budget":
-            return float(c.parameters.get("budget_usd", 8000))
-    return 8000.0
+        if "budget" in c.name.lower():
+            for key in ["budget_usd", "budget", "max_spend"]:
+                if key in c.parameters:
+                    return float(c.parameters[key])
+    return float("inf")
 
 
 def get_moq(config: ProblemConfig) -> int:
-    """Extract minimum order quantity per size."""
+    """Extract minimum order quantity."""
     for c in config.constraints:
-        if c.name == "minimum_order_quantity":
-            return int(c.parameters.get("moq_per_size", 6))
-    return 6
+        if "minimum" in c.name.lower() or "moq" in c.name.lower():
+            for key in ["moq_per_size", "moq", "min_qty", "minimum"]:
+                if key in c.parameters:
+                    return int(c.parameters[key])
+    return 0
