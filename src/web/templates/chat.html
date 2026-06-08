@@ -14,7 +14,11 @@
                 <h1>> cfa-optimization-agent</h1>
             </div>
 
-            <div class="upload-row">
+            <div id="uploadCaretBar" style="margin:0 20px;cursor:pointer;padding:6px 0;color:#8b949e;font-size:11px;display:flex;align-items:center;gap:6px;border-bottom:1px solid #30363d;">
+                <span id="uploadCaret" style="font-size:8px;">&#9660;</span>
+                <span>Files</span>
+            </div>
+            <div id="uploadRow" style="display:flex;gap:12px;margin:0 20px;padding:16px 0;">
                 <div class="upload-area" id="uploadArea">
                     <p>Drop a CSV data file here or click to upload</p>
                     <input type="file" id="fileInput" accept=".csv" hidden>

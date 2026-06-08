@@ -383,3 +383,16 @@ function setStep(stepId, state) {
     var el = document.getElementById(stepId);
     if (el) el.className = "pipeline-step " + state;
 }
+
+document.getElementById("uploadCaretBar").addEventListener("click", function() {
+    var row = document.getElementById("uploadRow");
+    var caret = document.getElementById("uploadCaret");
+    if (row.style.display === "none") {
+        row.style.display = "flex";
+        caret.innerHTML = "&#9660;";
+    } else {
+        row.style.display = "none";
+        caret.innerHTML = "&#9654;";
+    }
+});
+
