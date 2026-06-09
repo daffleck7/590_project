@@ -1,11 +1,10 @@
 """Tests for ProblemConfig Pydantic model."""
 
-import json
-
 import pytest
 from pydantic import ValidationError
 
 from src.models.problem_config import (
+    CostItem,
     Constraint,
     DecisionVariable,
     Objective,
@@ -19,7 +18,7 @@ def _make_valid_config() -> dict:
     return {
         "problem_description": "Minimize uniform ordering cost for a youth soccer league",
         "decision_variables": [
-            {"name": "order_qty_ym", "type": "integer", "bounds": (0, 500)},
+            {"name": "order_qty_ym", "type": "integer", "lower_bound": 0, "upper_bound": 500},
         ],
         "objective": {
             "direction": "minimize",
@@ -40,10 +39,10 @@ def _make_valid_config() -> dict:
                 "data_column": "quantity",
             },
         ],
-        "cost_structure": {
-            "overage_cost_per_unit": 10.0,
-            "underage_cost_per_unit": 25.0,
-        },
+        "cost_structure": [
+            {"name": "overage_cost", "value": 10.0},
+            {"name": "underage_cost", "value": 25.0},
+        ],
         "data_requirements": {
             "required_columns": ["size", "quantity", "product_category"],
         },
@@ -68,7 +67,7 @@ class TestProblemConfigValidation:
 
     def test_missing_required_field_raises(self) -> None:
         data = _make_valid_config()
-        del data["objective"]
+        del data["problem_description"]
         with pytest.raises(ValidationError):
             ProblemConfig(**data)
 
@@ -87,17 +86,28 @@ class TestProblemConfigValidation:
         config = ProblemConfig(**data)
         assert config.decision_variables == []
 
+    def test_cost_structure_list_of_items(self) -> None:
+        config = ProblemConfig(**_make_valid_config())
+        assert len(config.cost_structure) == 2
+        assert config.cost_structure[0].name == "overage_cost"
+        assert config.cost_structure[1].value == 25.0
+
 
 class TestDecisionVariable:
     """Test DecisionVariable model."""
 
-    def test_bounds_optional(self) -> None:
+    def test_upper_bound_optional(self) -> None:
         dv = DecisionVariable(name="qty", type="integer")
-        assert dv.bounds is None
+        assert dv.upper_bound is None
 
-    def test_with_bounds(self) -> None:
-        dv = DecisionVariable(name="qty", type="continuous", bounds=(0.0, 100.0))
-        assert dv.bounds == (0.0, 100.0)
+    def test_lower_bound_defaults_to_zero(self) -> None:
+        dv = DecisionVariable(name="qty", type="integer")
+        assert dv.lower_bound == 0.0
+
+    def test_with_explicit_bounds(self) -> None:
+        dv = DecisionVariable(name="qty", type="continuous", lower_bound=0.0, upper_bound=100.0)
+        assert dv.lower_bound == 0.0
+        assert dv.upper_bound == 100.0
 
 
 class TestConstraint:
