@@ -4,15 +4,21 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Results — CFA Optimization Agent</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Inter:wght@300;400;500;600&family=Roboto+Mono:wght@400;500&display=swap">
     <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
     <div class="results-page">
-        <h1>> run/{{ run_id }} — results</h1>
+        <div class="results-header">
+            <h1>Run Results</h1>
+            <div class="run-meta">RUN ID: {{ run_id }}</div>
+        </div>
 
         <div class="results-section" id="configSection">
             <div class="section-header" onclick="toggleSection('configSection')">
-                <h2>ProblemConfig</h2>
+                <h2>Problem Config</h2>
                 <span class="toggle">▼</span>
             </div>
             <div class="section-body">
@@ -27,7 +33,7 @@
             </div>
             <div class="section-body">
                 <div class="stats-grid" id="dataStats"></div>
-                <div style="margin-top: 16px; overflow-x: auto;">
+                <div style="overflow-x: auto;">
                     <table class="data-table" id="dataTable">
                         <thead id="dataTableHead"></thead>
                         <tbody id="dataTableBody"></tbody>

@@ -4,16 +4,21 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>CFA Optimization Agent</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Inter:wght@300;400;500;600&family=Roboto+Mono:wght@400;500&display=swap">
     <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
     <div class="app">
         <div class="main-panel">
             <div class="header">
-                <h1>> cfa-optimization-agent</h1>
+                <h1>CFA Optimization Agent</h1>
+                <span class="header-badge">AI Powered</span>
             </div>
 
             <div class="upload-area" id="uploadArea">
+                <span class="upload-icon">📂</span>
                 <p>Drop a CSV file here or click to upload</p>
                 <input type="file" id="fileInput" accept=".csv" hidden>
                 <div class="filename" id="uploadFilename"></div>
@@ -33,30 +38,33 @@
         </div>
 
         <div class="sidebar">
-            <h2>Status</h2>
-
-            <div class="status-item" id="uploadStatus" style="display:none">
-                <div class="label">Uploaded File</div>
-                <div class="value" id="uploadStatusFile">—</div>
+            <div class="sidebar-section" id="uploadStatus" style="display:none">
+                <div class="sidebar-label">Uploaded File</div>
+                <div class="status-item">
+                    <div class="label">File</div>
+                    <div class="value" id="uploadStatusFile">—</div>
+                </div>
             </div>
 
-            <h2>Pipeline</h2>
-            <div class="pipeline-steps">
-                <div class="pipeline-step" id="stepUpload">
-                    <div class="dot"></div>
-                    <span>Upload CSV</span>
-                </div>
-                <div class="pipeline-step" id="stepIntake">
-                    <div class="dot"></div>
-                    <span>Problem Formulation</span>
-                </div>
-                <div class="pipeline-step" id="stepCleaning">
-                    <div class="dot"></div>
-                    <span>Data Cleaning</span>
-                </div>
-                <div class="pipeline-step" id="stepDone">
-                    <div class="dot"></div>
-                    <span>Complete</span>
+            <div class="sidebar-section">
+                <div class="sidebar-label">Pipeline</div>
+                <div class="pipeline-steps">
+                    <div class="pipeline-step" id="stepUpload">
+                        <div class="step-num">1</div>
+                        <span>Upload CSV</span>
+                    </div>
+                    <div class="pipeline-step" id="stepIntake">
+                        <div class="step-num">2</div>
+                        <span>Problem Formulation</span>
+                    </div>
+                    <div class="pipeline-step" id="stepCleaning">
+                        <div class="step-num">3</div>
+                        <span>Data Cleaning</span>
+                    </div>
+                    <div class="pipeline-step" id="stepDone">
+                        <div class="step-num">4</div>
+                        <span>Complete</span>
+                    </div>
                 </div>
             </div>
 
