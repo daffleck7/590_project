@@ -3,8 +3,10 @@
 Manages run directories, trace logging, and the handoff between agents.
 """
 
+import asyncio
 import json
 import time
+from collections.abc import Callable, Awaitable
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -12,8 +14,8 @@ import anyio
 
 from src.intake.agent import run_intake_agent
 from src.data_ingestion.agent import run_cleaning_agent
-from src.explanation.agent import run_explanation_agent, save_explanation
-from src.models.optimization_result import OptimizationResult
+from src.modeling.agent import run_modeling_agent
+from src.explanation.agent import run_explanation_agent
 from src.models.problem_config import ProblemConfig
 
 
@@ -50,16 +52,35 @@ class Orchestrator:
     data cleaning agent -> cleaned data + manifest.
     """
 
-    def __init__(self, csv_path: str, base_dir: str = "runs") -> None:
+    def __init__(
+        self,
+        csv_path: str,
+        base_dir: str = "runs",
+        callback: Callable[[dict], Awaitable[None]] | None = None,
+        interactive: bool = True,
+    ) -> None:
         """Initialize the orchestrator.
 
         Args:
             csv_path: Path to the raw CSV file.
             base_dir: Parent directory for run outputs.
+            callback: Optional async callback for event routing.
+            interactive: If True, allow stdin prompts (CLI mode).
         """
         self.csv_path = csv_path
         self.run_dir = create_run_directory(base_dir)
         self.trace: dict = {"steps": [], "run_dir": self.run_dir}
+        self.callback = callback
+        self.interactive = interactive
+        self.user_input_queue: asyncio.Queue[str] = asyncio.Queue()
+        self.activity_log: list[dict] = []
+
+    async def _log_event(self, event: dict) -> None:
+        """Log an event and forward to callback."""
+        event["timestamp"] = datetime.now(timezone.utc).isoformat()
+        self.activity_log.append(event)
+        if self.callback:
+            await self.callback(event)
 
     async def run_intake(
         self, description: str = ""
@@ -77,7 +98,11 @@ class Orchestrator:
         print(f"{'='*60}")
 
         start = time.time()
-        config, usage_log = await run_intake_agent(self.csv_path, description)
+        input_queue = None if self.interactive else self.user_input_queue
+        config, usage_log = await run_intake_agent(
+            self.csv_path, self.run_dir, description, callback=self._log_event,
+            user_input_queue=input_queue,
+        )
         duration = time.time() - start
 
         self.trace["steps"].append({
@@ -89,9 +114,7 @@ class Orchestrator:
         })
 
         if config:
-            config_path = Path(self.run_dir) / "problem_config.json"
-            config_path.write_text(config.model_dump_json(indent=2))
-            print(f"\nProblemConfig saved to {config_path}")
+            print(f"\nProblemConfig saved to {Path(self.run_dir) / 'problem_config.json'}")
 
         return config
 
@@ -110,9 +133,11 @@ class Orchestrator:
         print("DATA CLEANING AGENT")
         print(f"{'='*60}")
 
+        await self._log_event({"type": "cleaning_start"})
+
         start = time.time()
         cleaned_path, manifest, usage_log = await run_cleaning_agent(
-            self.csv_path, config, self.run_dir
+            self.csv_path, config, self.run_dir, callback=self._log_event
         )
         duration = time.time() - start
 
@@ -124,7 +149,97 @@ class Orchestrator:
             "success": cleaned_path is not None,
         })
 
+        await self._log_event({
+            "type": "cleaning_done",
+            "cleaned_path": cleaned_path,
+            "manifest": manifest,
+        })
+
         return cleaned_path, manifest
+
+    async def run_modeling(
+        self, config: ProblemConfig, cleaned_csv_path: str
+    ) -> bool:
+        """Run the modeling agent (prediction + optimization).
+
+        Args:
+            config: ProblemConfig for cost structure and constraints.
+            cleaned_csv_path: Path to the cleaned CSV.
+
+        Returns:
+            True if successful, False otherwise.
+        """
+        print(f"\n{'='*60}")
+        print("MODELING AGENT")
+        print(f"{'='*60}")
+
+        await self._log_event({"type": "modeling_start"})
+
+        start = time.time()
+        success, usage_log = await run_modeling_agent(
+            config, cleaned_csv_path, self.run_dir, callback=self._log_event
+        )
+        duration = time.time() - start
+
+        self.trace["steps"].append({
+            "agent": "modeling",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "duration_s": round(duration, 2),
+            "usage": usage_log,
+            "success": success,
+        })
+
+        await self._log_event({"type": "modeling_done"})
+
+        # Read and emit the summary
+        summary_path = Path(self.run_dir) / "modeling_summary.txt"
+        if summary_path.exists():
+            await self._log_event({
+                "type": "stage_summary",
+                "stage": "modeling",
+                "summary": summary_path.read_text(encoding="utf-8", errors="replace"),
+            })
+
+        return success
+
+    async def run_explanation(self) -> bool:
+        """Run the explanation agent to produce the final report.
+
+        Returns:
+            True if report was generated, False otherwise.
+        """
+        print(f"\n{'='*60}")
+        print("EXPLANATION AGENT")
+        print(f"{'='*60}")
+
+        await self._log_event({"type": "explanation_start"})
+
+        start = time.time()
+        success, usage_log = await run_explanation_agent(
+            self.run_dir, callback=self._log_event
+        )
+        duration = time.time() - start
+
+        self.trace["steps"].append({
+            "agent": "explanation",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "duration_s": round(duration, 2),
+            "usage": usage_log,
+            "success": success,
+        })
+
+        await self._log_event({"type": "explanation_done"})
+
+        # Read and emit the report
+        report_path = Path(self.run_dir) / "final_report.md"
+        if report_path.exists():
+            await self._log_event({
+                "type": "stage_summary",
+                "stage": "explanation",
+                "summary": report_path.read_text(encoding="utf-8", errors="replace"),
+            })
+
+        return success
 
     async def run_full_pipeline(self, description: str = "") -> None:
         """Run the complete intake + data cleaning pipeline.
@@ -134,12 +249,15 @@ class Orchestrator:
         """
         config = await self.run_intake(description)
         if config is None:
+            await self._log_event({"type": "error", "message": "Failed to produce ProblemConfig"})
             print("\nFailed to produce a valid ProblemConfig. Aborting.")
+            self.trace["activity_log"] = self.activity_log
             save_trace(self.run_dir, self.trace)
             return
 
         cleaned_path, manifest = await self.run_cleaning(config)
 
+        self.trace["activity_log"] = self.activity_log
         save_trace(self.run_dir, self.trace)
 
         print(f"\n{'='*60}")
@@ -155,56 +273,6 @@ class Orchestrator:
 
         print(f"Trace log:     {Path(self.run_dir) / 'trace.json'}")
 
-    async def run_explanation(
-        self,
-        result: OptimizationResult,
-        cleaned_csv_path: str,
-        config: ProblemConfig,
-        train_years: list[int] | None = None,
-        test_years: list[int] | None = None,
-    ) -> str | None:
-        """Run the explanation agent to produce a plain-English report.
-
-        Args:
-            result: OptimizationResult from the optimizer module.
-            cleaned_csv_path: Path to the aggregated cleaned CSV.
-            config: ProblemConfig used throughout the pipeline.
-            train_years: Training years for baseline. Defaults to 2020-2024.
-            test_years: Test years to evaluate on. Defaults to 2025-2026.
-
-        Returns:
-            Path to the saved report.md, or None on failure.
-        """
-        print(f"\n{'='*60}")
-        print("EXPLANATION AGENT")
-        print(f"{'='*60}")
-
-        start = time.time()
-        report_text, baseline_data, sensitivity_data = await run_explanation_agent(
-            result=result,
-            cleaned_csv_path=cleaned_csv_path,
-            config=config,
-            train_years=train_years,
-            test_years=test_years,
-        )
-        duration = time.time() - start
-
-        self.trace["steps"].append({
-            "agent": "explanation",
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-            "duration_s": round(duration, 2),
-            "success": bool(report_text),
-        })
-
-        if report_text:
-            save_explanation(self.run_dir, report_text, baseline_data, sensitivity_data)
-            report_path = str(Path(self.run_dir) / "report.md")
-            print(f"\nReport saved to {report_path}")
-            return report_path
-
-        print("\nWarning: Explanation agent did not produce a report.")
-        return None
-
     async def run_cleaning_only(self, config_path: str) -> None:
         """Re-run just the data cleaning step with an existing config.
 
@@ -218,6 +286,7 @@ class Orchestrator:
 
         cleaned_path, manifest = await self.run_cleaning(config)
 
+        self.trace["activity_log"] = self.activity_log
         save_trace(self.run_dir, self.trace)
 
         print(f"\n{'='*60}")

@@ -1,0 +1,6 @@
+optimizer,objective_value,total_spend,max_budget_violation,feasible,runtime_seconds,iterations,success,message
+L-BFGS-B,34567.27574756843,23982.0,0.0,True,0.07451939582824707,39,True,CONVERGENCE: RELATIVE REDUCTION OF F <= FACTR*EPSMCH
+SLSQP,34595.27574756843,23977.0,0.0,True,30.726530075073242,90,False,Inequality constraints incompatible
+SGD,35651.99949162256,23977.0,0.0,True,1.982468605041504,4000,True,Projected SGD completed
+Gradient Descent,35679.81575169234,23978.0,0.0,True,0.5814182758331299,781,True,Projected gradient descent completed
+Adam,37169.255864595216,23972.0,0.0,True,1.7520885467529297,3000,True,Projected Adam completed

@@ -1,124 +1,165 @@
-"""Explanation Agent — LLM call #3 in the pipeline.
+"""Explanation Agent — produces a final stakeholder report from pipeline outputs.
 
-Takes optimizer results + cleaned data, runs pure-Python analysis,
-then calls the LLM once to produce a plain-English report.
+Uses the Claude Agent SDK to read all summaries and results, then generates
+a well-formatted recommendation report.
 """
 
 import json
+import re
+from collections.abc import Callable, Awaitable
 from pathlib import Path
 
-import pandas as pd
 from claude_agent_sdk import (
     ClaudeAgentOptions,
     ClaudeSDKClient,
     AssistantMessage,
+    ResultMessage,
     TextBlock,
 )
 
-from src.explanation.baseline import baseline_comparison
-from src.explanation.sensitivity import sensitivity_analysis
 from src.explanation.prompts import EXPLANATION_SYSTEM_PROMPT
-from src.models.optimization_result import OptimizationResult
-from src.models.problem_config import ProblemConfig
+
+
+try:
+    from claude_agent_sdk import tool, create_sdk_mcp_server
+except ImportError:
+    tool = None
+    create_sdk_mcp_server = None
+
+
+def _build_mcp_server(run_dir: str):
+    """Build MCP server with file reading and report saving tools."""
+
+    async def _read_file(args: dict) -> dict:
+        """Read a file from the run directory."""
+        filename = args["filename"]
+        file_path = Path(run_dir) / filename
+        if not file_path.exists():
+            return {
+                "content": [{"type": "text", "text": f"File not found: {filename}"}],
+                "isError": True,
+            }
+        content = file_path.read_text(encoding="utf-8", errors="replace")
+        # Truncate very large files
+        if len(content) > 10000:
+            content = content[:10000] + f"\n\n... (truncated, {len(content)} chars total)"
+        return {"content": [{"type": "text", "text": content}]}
+
+    async def _list_files(args: dict) -> dict:
+        """List all files in the run directory."""
+        files = sorted(Path(run_dir).iterdir())
+        lines = [f"  {f.name} ({f.stat().st_size:,} bytes)" for f in files if f.is_file()]
+        return {"content": [{"type": "text", "text": "Files in run directory:\n" + "\n".join(lines)}]}
+
+    async def _save_report(args: dict) -> dict:
+        """Save the final report."""
+        report_path = Path(run_dir) / "final_report.md"
+        report_path.write_text(args["report"], encoding="utf-8")
+        return {"content": [{"type": "text", "text": f"Report saved to {report_path}"}]}
+
+    read_tool = tool(
+        "read_file",
+        "Read a file from the run directory. Use this to read agent summaries, "
+        "CSV results, and the ProblemConfig.",
+        {"filename": str},
+    )(_read_file)
+
+    list_tool = tool(
+        "list_files",
+        "List all files in the run directory to see what's available.",
+        {},
+    )(_list_files)
+
+    save_tool = tool(
+        "save_report",
+        "Save the final formatted report as Markdown. Call this as your FINAL action.",
+        {"report": str},
+    )(_save_report)
+
+    return create_sdk_mcp_server(
+        "explanation-tools",
+        tools=[read_tool, list_tool, save_tool],
+    )
+
+
+async def _default_callback(event: dict) -> None:
+    """Default callback that prints to stdout."""
+    if event["type"] == "message":
+        print(f"\nExplanation Agent: {event['text']}")
+    elif event["type"] == "tool_call":
+        print(f"\n  [calling {event['tool']}]")
 
 
 async def run_explanation_agent(
-    result: OptimizationResult,
-    cleaned_csv_path: str,
-    config: ProblemConfig,
-    train_years: list[int] | None = None,
-    test_years: list[int] | None = None,
-) -> tuple[str, dict, dict]:
-    """Run the explanation agent and return the report + analysis data.
+    run_dir: str,
+    callback: Callable[[dict], Awaitable[None]] | None = None,
+) -> tuple[bool, list[dict]]:
+    """Run the explanation agent to produce a final report.
 
     Args:
-        result: OptimizationResult from Fabian's optimizer module.
-        cleaned_csv_path: Path to the aggregated cleaned CSV.
-        config: ProblemConfig used throughout the pipeline.
-        train_years: Training years for baseline computation. Defaults to 2020-2024.
-        test_years: Test years to evaluate on. Defaults to 2025-2026.
+        run_dir: Run directory containing all pipeline outputs.
+        callback: Optional async callback for event routing.
 
     Returns:
-        Tuple of (report_text, baseline_data, sensitivity_data).
+        Tuple of (success bool, usage log).
     """
-    if train_years is None:
-        train_years = [2020, 2021, 2022, 2023, 2024]
-    if test_years is None:
-        test_years = [2025, 2026]
+    if callback is None:
+        callback = _default_callback
 
-    demand_df = pd.read_csv(cleaned_csv_path)
-
-    baseline_data = baseline_comparison(
-        agent_quantities=result.order_quantities,
-        demand_df=demand_df,
-        config=config,
-        train_years=train_years,
-        test_years=test_years,
-    )
-
-    test_df = demand_df[demand_df["year"].isin(test_years)].copy().reset_index(drop=True)
-    sensitivity_data = sensitivity_analysis(
-        order_quantities=result.order_quantities,
-        demand_df=test_df,
-        config=config,
-    )
-
-    payload = {
-        "optimization_result": {
-            "order_quantities": result.order_quantities,
-            "objective_value": result.objective_value,
-            "total_spend": result.total_spend,
-            "shadow_prices": result.shadow_prices,
-            "solver_status": result.solver_status,
-            "selected_model": result.selected_model,
-        },
-        "baseline_comparison": baseline_data,
-        "sensitivity_analysis": sensitivity_data,
-    }
+    mcp_server = _build_mcp_server(run_dir)
+    usage_log: list[dict] = []
 
     prompt = (
-        "Please write the four-section report based on the following analysis results.\n\n"
-        f"```json\n{json.dumps(payload, indent=2)}\n```"
+        f"## Task\n\n"
+        f"The optimization pipeline has completed. All outputs are in: {run_dir}\n\n"
+        f"This is the final report for MGMT 590-037 (AI-Enhanced Optimization). "
+        f"It will be graded on: Problem Formulation (20%), Data & Prediction (20%), "
+        f"Optimization Model (25%), Agent Design & Integration (20%), "
+        f"Presentation & Communication (15%).\n\n"
+        f"## Steps\n\n"
+        f"1. Call `list_files` to see what's available\n"
+        f"2. Read ALL available files — every .txt, .json, and .csv. "
+        f"You need the full picture to write a complete report.\n"
+        f"3. Key files to look for:\n"
+        f"   - `problem_config.json` — the structured problem definition\n"
+        f"   - `cleaning_summary.txt` — what the data cleaning agent did\n"
+        f"   - `modeling_summary.txt` — prediction results, tuning, optimization\n"
+        f"   - `best_optimizer_order_plan.csv` — the recommended order quantities\n"
+        f"   - `optimizer_comparison.csv` — all solvers compared\n"
+        f"   - `sensitivity_results.json` — cost sensitivity analysis\n"
+        f"   - `baseline_results.json` — agent vs baseline comparison\n"
+        f"4. Write the report following the EXACT 11-section structure in your "
+        f"system prompt. Do not skip any section.\n"
+        f"5. Call `save_report` with the complete Markdown report.\n"
     )
 
     options = ClaudeAgentOptions(
         system_prompt=EXPLANATION_SYSTEM_PROMPT,
+        mcp_servers={"explanation": mcp_server},
+        allowed_tools=[],
         permission_mode="bypassPermissions",
-        max_turns=2,
+        max_turns=25,
     )
-
-    report_text = ""
 
     async with ClaudeSDKClient(options=options) as client:
         await client.query(prompt)
+
         async for message in client.receive_response():
             if isinstance(message, AssistantMessage):
+                if message.usage:
+                    usage_log.append(message.usage)
                 for block in message.content:
                     if isinstance(block, TextBlock):
-                        report_text += block.text
+                        if re.match(r'^mcp__\w+__\w+\(.*\)$', block.text.strip(), re.DOTALL):
+                            continue
+                        await callback({
+                            "type": "message",
+                            "agent": "explanation",
+                            "text": block.text,
+                        })
+                    elif hasattr(block, "name"):
+                        pass
 
-    return report_text, baseline_data, sensitivity_data
-
-
-def save_explanation(
-    run_dir: str,
-    report_text: str,
-    baseline_data: dict,
-    sensitivity_data: dict,
-) -> None:
-    """Save all explanation outputs to the run directory.
-
-    Args:
-        run_dir: Path to the run directory.
-        report_text: Plain-English report from the LLM.
-        baseline_data: Output of baseline_comparison().
-        sensitivity_data: Output of sensitivity_analysis().
-    """
-    out = Path(run_dir)
-    (out / "report.md").write_text(report_text, encoding="utf-8")
-    (out / "baseline_comparison.json").write_text(
-        json.dumps(baseline_data, indent=2), encoding="utf-8"
-    )
-    (out / "sensitivity_analysis.json").write_text(
-        json.dumps(sensitivity_data, indent=2), encoding="utf-8"
-    )
+    report_path = Path(run_dir) / "final_report.md"
+    success = report_path.exists()
+    return success, usage_log

@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CFA Optimization Agent</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="app">
+        <!-- Phase 1: Chat with intake agent -->
+        <div class="main-panel" id="chatView">
+            <div class="header">
+                <h1>> cfa-optimization-agent</h1>
+            </div>
+
+            <div id="uploadCaretBar" style="margin:0 20px;cursor:pointer;padding:6px 0;color:#8b949e;font-size:11px;display:flex;align-items:center;gap:6px;border-bottom:1px solid #30363d;">
+                <span id="uploadCaret" style="font-size:8px;">&#9660;</span>
+                <span>Files</span>
+            </div>
+            <div id="uploadRow" style="display:flex;gap:12px;margin:0 20px;padding:16px 0;">
+                <div class="upload-area" id="uploadArea">
+                    <p>Drop a CSV data file here or click to upload</p>
+                    <input type="file" id="fileInput" accept=".csv" hidden>
+                    <div class="filename" id="uploadFilename"></div>
+                </div>
+                <div class="upload-area optional" id="descUploadArea">
+                    <p>Problem description (optional)</p>
+                    <span class="upload-hint">.txt, .md, or .pdf</span>
+                    <input type="file" id="descFileInput" accept=".txt,.md,.pdf,.doc,.docx" hidden>
+                    <div class="filename" id="descFilename"></div>
+                </div>
+            </div>
+
+            <div class="chat-container" id="chatContainer"></div>
+
+            <div class="chat-input-area">
+                <textarea
+                    id="chatInput"
+                    placeholder="Describe your optimization problem..."
+                    rows="1"
+                    disabled
+                ></textarea>
+                <button id="sendBtn" disabled>Send</button>
+            </div>
+        </div>
+
+        <!-- Phase 2: Pipeline progress (hidden initially) -->
+        <div class="main-panel" id="progressView" style="display:none">
+            <div class="header">
+                <h1>> cfa-optimization-agent</h1>
+                <span class="header-status" id="headerStatus">Running...</span>
+            </div>
+
+            <div class="progress-content">
+                <div class="progress-bar-container">
+                    <div class="progress-bar" id="progressBar" style="width: 0%"></div>
+                </div>
+                <div class="progress-label" id="progressLabel">Initializing...</div>
+
+                <div class="stage-cards" id="stageCards">
+                    <div class="stage-card" id="stageIntake">
+                        <div class="stage-header">
+                            <span class="stage-icon done-icon">&#10003;</span>
+                            <span class="stage-title">Problem Formulation</span>
+                        </div>
+                        <div class="stage-summary" id="intakeSummary">Config approved by user.</div>
+                    </div>
+
+                    <div class="stage-card pending" id="stageCleaning">
+                        <div class="stage-header">
+                            <span class="stage-icon" id="cleaningIcon">2</span>
+                            <span class="stage-title">Data Cleaning Agent</span>
+                        </div>
+                        <div class="stage-summary" id="cleaningSummary"></div>
+                    </div>
+
+                    <div class="stage-card pending" id="stageModeling">
+                        <div class="stage-header">
+                            <span class="stage-icon" id="modelingIcon">3</span>
+                            <span class="stage-title">Modeling Agent</span>
+                        </div>
+                        <div class="stage-summary" id="modelingSummary"></div>
+                    </div>
+
+                    <div class="stage-card pending" id="stageExplanation">
+                        <div class="stage-header">
+                            <span class="stage-icon" id="explanationIcon">4</span>
+                            <span class="stage-title">Explanation Agent</span>
+                        </div>
+                        <div class="stage-summary" id="explanationSummary"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="sidebar">
+            <h2>Status</h2>
+
+            <div class="status-item" id="uploadStatus" style="display:none">
+                <div class="label">Uploaded File</div>
+                <div class="value" id="uploadStatusFile">--</div>
+            </div>
+
+            <h2>Pipeline</h2>
+            <div class="pipeline-steps">
+                <div class="pipeline-step" id="stepUpload">
+                    <div class="dot"></div>
+                    <span>Upload CSV</span>
+                </div>
+                <div class="pipeline-step" id="stepIntake">
+                    <div class="dot"></div>
+                    <span>Problem Formulation</span>
+                </div>
+                <div class="pipeline-step" id="stepCleaning">
+                    <div class="dot"></div>
+                    <span>Data Cleaning</span>
+                </div>
+                <div class="pipeline-step" id="stepModeling">
+                    <div class="dot"></div>
+                    <span>Modeling</span>
+                </div>
+                <div class="pipeline-step" id="stepExplanation">
+                    <div class="dot"></div>
+                    <span>Explanation</span>
+                </div>
+                <div class="pipeline-step" id="stepDone">
+                    <div class="dot"></div>
+                    <span>Complete</span>
+                </div>
+            </div>
+
+            <a class="btn-results" id="btnResults" href="#">View Results &#8594;</a>
+        </div>
+    </div>
+
+    <script src="/static/chat.js"></script>
+</body>
+</html>

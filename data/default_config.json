@@ -1,0 +1,466 @@
+{
+  "problem_description": "CFA youth soccer league in Orange County processes 2,000–3,000 uniform orders per season across jerseys, shorts, and socks in 14 size codes. Orders must be placed before demand is realized. The current Adidas jersey model (Tiro 25) is in its final lifecycle year — unsold inventory cannot be reordered next season. Minimize total cost across overage, underage, and procurement subject to a seasonal budget and supplier minimum order quantities.",
+  "problem_title": "CFA Uniform Ordering Optimization — Tiro 25 Year 2",
+  "decision_variables": [],
+  "objective": {
+    "direction": "minimize",
+    "description": "Minimize total expected newsvendor cost across all 14 sizes × 3 product categories × upcoming seasons — weighted by lifecycle year cost structure (Year 2 underage penalty is ~5x higher than Year 1 due to jersey discontinuation).",
+    "metric_name": "total_newsvendor_cost"
+  },
+  "constraints": [
+    {
+      "name": "seasonal_budget",
+      "description": "Total procurement spend per season cannot exceed league budget",
+      "type": "hard",
+      "parameters": {
+        "budget_usd": 8000,
+        "note": "Estimated from proposal — update with real budget"
+      }
+    },
+    {
+      "name": "minimum_order_quantity",
+      "description": "Adidas requires minimum 6 units per size per order",
+      "type": "hard",
+      "parameters": {
+        "moq_per_size": 6
+      }
+    },
+    {
+      "name": "non_negativity",
+      "description": "Cannot order negative units",
+      "type": "hard",
+      "parameters": {}
+    },
+    {
+      "name": "carryover_inventory",
+      "description": "Year 1 unsold stock carries to Year 2 at zero holding cost",
+      "type": "hard",
+      "parameters": {
+        "holding_cost_per_unit": 0.0
+      }
+    }
+  ],
+  "uncertain_parameters": [
+    {
+      "name": "demand_YXS_top",
+      "description": "Number of YXS top units ordered in the upcoming season",
+      "data_column": "quantity",
+      "unit": "units"
+    },
+    {
+      "name": "demand_YS_top",
+      "description": "Number of YS top units ordered in the upcoming season",
+      "data_column": "quantity",
+      "unit": "units"
+    },
+    {
+      "name": "demand_YM_top",
+      "description": "Number of YM top units ordered in the upcoming season",
+      "data_column": "quantity",
+      "unit": "units"
+    },
+    {
+      "name": "demand_YL_top",
+      "description": "Number of YL top units ordered in the upcoming season",
+      "data_column": "quantity",
+      "unit": "units"
+    },
+    {
+      "name": "demand_YXL_top",
+      "description": "Number of YXL top units ordered in the upcoming season",
+      "data_column": "quantity",
+      "unit": "units"
+    },
+    {
+      "name": "demand_AS_top",
+      "description": "Number of AS top units ordered in the upcoming season",
+      "data_column": "quantity",
+      "unit": "units"
+    },
+    {
+      "name": "demand_AM_top",
+      "description": "Number of AM top units ordered in the upcoming season",
+      "data_column": "quantity",
+      "unit": "units"
+    },
+    {
+      "name": "demand_AL_top",
+      "description": "Number of AL top units ordered in the upcoming season",
+      "data_column": "quantity",
+      "unit": "units"
+    },
+    {
+      "name": "demand_AXL_top",
+      "description": "Number of AXL top units ordered in the upcoming season",
+      "data_column": "quantity",
+      "unit": "units"
+    },
+    {
+      "name": "demand_WXS_top",
+      "description": "Number of WXS top units ordered in the upcoming season",
+      "data_column": "quantity",
+      "unit": "units"
+    },
+    {
+      "name": "demand_WS_top",
+      "description": "Number of WS top units ordered in the upcoming season",
+      "data_column": "quantity",
+      "unit": "units"
+    },
+    {
+      "name": "demand_WM_top",
+      "description": "Number of WM top units ordered in the upcoming season",
+      "data_column": "quantity",
+      "unit": "units"
+    },
+    {
+      "name": "demand_WL_top",
+      "description": "Number of WL top units ordered in the upcoming season",
+      "data_column": "quantity",
+      "unit": "units"
+    },
+    {
+      "name": "demand_WXL_top",
+      "description": "Number of WXL top units ordered in the upcoming season",
+      "data_column": "quantity",
+      "unit": "units"
+    },
+    {
+      "name": "demand_YXS_bottom",
+      "description": "Number of YXS bottom units ordered in the upcoming season",
+      "data_column": "quantity",
+      "unit": "units"
+    },
+    {
+      "name": "demand_YS_bottom",
+      "description": "Number of YS bottom units ordered in the upcoming season",
+      "data_column": "quantity",
+      "unit": "units"
+    },
+    {
+      "name": "demand_YM_bottom",
+      "description": "Number of YM bottom units ordered in the upcoming season",
+      "data_column": "quantity",
+      "unit": "units"
+    },
+    {
+      "name": "demand_YL_bottom",
+      "description": "Number of YL bottom units ordered in the upcoming season",
+      "data_column": "quantity",
+      "unit": "units"
+    },
+    {
+      "name": "demand_YXL_bottom",
+      "description": "Number of YXL bottom units ordered in the upcoming season",
+      "data_column": "quantity",
+      "unit": "units"
+    },
+    {
+      "name": "demand_AS_bottom",
+      "description": "Number of AS bottom units ordered in the upcoming season",
+      "data_column": "quantity",
+      "unit": "units"
+    },
+    {
+      "name": "demand_AM_bottom",
+      "description": "Number of AM bottom units ordered in the upcoming season",
+      "data_column": "quantity",
+      "unit": "units"
+    },
+    {
+      "name": "demand_AL_bottom",
+      "description": "Number of AL bottom units ordered in the upcoming season",
+      "data_column": "quantity",
+      "unit": "units"
+    },
+    {
+      "name": "demand_AXL_bottom",
+      "description": "Number of AXL bottom units ordered in the upcoming season",
+      "data_column": "quantity",
+      "unit": "units"
+    },
+    {
+      "name": "demand_WXS_bottom",
+      "description": "Number of WXS bottom units ordered in the upcoming season",
+      "data_column": "quantity",
+      "unit": "units"
+    },
+    {
+      "name": "demand_WS_bottom",
+      "description": "Number of WS bottom units ordered in the upcoming season",
+      "data_column": "quantity",
+      "unit": "units"
+    },
+    {
+      "name": "demand_WM_bottom",
+      "description": "Number of WM bottom units ordered in the upcoming season",
+      "data_column": "quantity",
+      "unit": "units"
+    },
+    {
+      "name": "demand_WL_bottom",
+      "description": "Number of WL bottom units ordered in the upcoming season",
+      "data_column": "quantity",
+      "unit": "units"
+    },
+    {
+      "name": "demand_WXL_bottom",
+      "description": "Number of WXL bottom units ordered in the upcoming season",
+      "data_column": "quantity",
+      "unit": "units"
+    },
+    {
+      "name": "demand_YXS_socks",
+      "description": "Number of YXS socks units ordered in the upcoming season",
+      "data_column": "quantity",
+      "unit": "units"
+    },
+    {
+      "name": "demand_YS_socks",
+      "description": "Number of YS socks units ordered in the upcoming season",
+      "data_column": "quantity",
+      "unit": "units"
+    },
+    {
+      "name": "demand_YM_socks",
+      "description": "Number of YM socks units ordered in the upcoming season",
+      "data_column": "quantity",
+      "unit": "units"
+    },
+    {
+      "name": "demand_YL_socks",
+      "description": "Number of YL socks units ordered in the upcoming season",
+      "data_column": "quantity",
+      "unit": "units"
+    },
+    {
+      "name": "demand_YXL_socks",
+      "description": "Number of YXL socks units ordered in the upcoming season",
+      "data_column": "quantity",
+      "unit": "units"
+    },
+    {
+      "name": "demand_AS_socks",
+      "description": "Number of AS socks units ordered in the upcoming season",
+      "data_column": "quantity",
+      "unit": "units"
+    },
+    {
+      "name": "demand_AM_socks",
+      "description": "Number of AM socks units ordered in the upcoming season",
+      "data_column": "quantity",
+      "unit": "units"
+    },
+    {
+      "name": "demand_AL_socks",
+      "description": "Number of AL socks units ordered in the upcoming season",
+      "data_column": "quantity",
+      "unit": "units"
+    },
+    {
+      "name": "demand_AXL_socks",
+      "description": "Number of AXL socks units ordered in the upcoming season",
+      "data_column": "quantity",
+      "unit": "units"
+    },
+    {
+      "name": "demand_WXS_socks",
+      "description": "Number of WXS socks units ordered in the upcoming season",
+      "data_column": "quantity",
+      "unit": "units"
+    },
+    {
+      "name": "demand_WS_socks",
+      "description": "Number of WS socks units ordered in the upcoming season",
+      "data_column": "quantity",
+      "unit": "units"
+    },
+    {
+      "name": "demand_WM_socks",
+      "description": "Number of WM socks units ordered in the upcoming season",
+      "data_column": "quantity",
+      "unit": "units"
+    },
+    {
+      "name": "demand_WL_socks",
+      "description": "Number of WL socks units ordered in the upcoming season",
+      "data_column": "quantity",
+      "unit": "units"
+    },
+    {
+      "name": "demand_WXL_socks",
+      "description": "Number of WXL socks units ordered in the upcoming season",
+      "data_column": "quantity",
+      "unit": "units"
+    }
+  ],
+  "cost_structure": [
+    {
+      "name": "unit_cost",
+      "value": 25.0,
+      "unit": "USD/unit",
+      "description": "Adidas wholesale price per jersey",
+      "lifecycle_year": null,
+      "product_category": "top"
+    },
+    {
+      "name": "overage_cost",
+      "value": 5.0,
+      "unit": "USD/unit",
+      "description": "Year 1: storage / opportunity cost of unsold jersey",
+      "lifecycle_year": 1,
+      "product_category": "top"
+    },
+    {
+      "name": "overage_cost",
+      "value": 15.0,
+      "unit": "USD/unit",
+      "description": "Year 2: sold on eBay at loss — salvage discount + fees",
+      "lifecycle_year": 2,
+      "product_category": "top"
+    },
+    {
+      "name": "underage_cost",
+      "value": 12.0,
+      "unit": "USD/unit",
+      "description": "Year 1: rush order premium + extra shipping",
+      "lifecycle_year": 1,
+      "product_category": "top"
+    },
+    {
+      "name": "underage_cost",
+      "value": 60.0,
+      "unit": "USD/unit",
+      "description": "Year 2: discontinued model — secondhand premium or lost sale + parent unhappy",
+      "lifecycle_year": 2,
+      "product_category": "top"
+    },
+    {
+      "name": "unit_cost",
+      "value": 16.0,
+      "unit": "USD/unit",
+      "description": "Adidas wholesale shorts price",
+      "lifecycle_year": null,
+      "product_category": "bottom"
+    },
+    {
+      "name": "overage_cost",
+      "value": 3.0,
+      "unit": "USD/unit",
+      "description": "Low holding cost — shorts not size-critical",
+      "lifecycle_year": 1,
+      "product_category": "bottom"
+    },
+    {
+      "name": "overage_cost",
+      "value": 8.0,
+      "unit": "USD/unit",
+      "description": "Salvage loss on discontinued shorts",
+      "lifecycle_year": 2,
+      "product_category": "bottom"
+    },
+    {
+      "name": "underage_cost",
+      "value": 8.0,
+      "unit": "USD/unit",
+      "description": "Rush order premium for shorts",
+      "lifecycle_year": 1,
+      "product_category": "bottom"
+    },
+    {
+      "name": "underage_cost",
+      "value": 25.0,
+      "unit": "USD/unit",
+      "description": "Discontinued shorts — harder to source",
+      "lifecycle_year": 2,
+      "product_category": "bottom"
+    },
+    {
+      "name": "unit_cost",
+      "value": 10.0,
+      "unit": "USD/unit",
+      "description": "Adidas socks wholesale",
+      "lifecycle_year": null,
+      "product_category": "socks"
+    },
+    {
+      "name": "overage_cost",
+      "value": 1.0,
+      "unit": "USD/unit",
+      "description": "Socks easy to carry — minimal overage cost",
+      "lifecycle_year": null,
+      "product_category": "socks"
+    },
+    {
+      "name": "underage_cost",
+      "value": 5.0,
+      "unit": "USD/unit",
+      "description": "Generic socks — easier to source at premium",
+      "lifecycle_year": null,
+      "product_category": "socks"
+    }
+  ],
+  "data_requirements": {
+    "required_columns": [
+      "order_id",
+      "order_date",
+      "season",
+      "year",
+      "uniform_set",
+      "product_category",
+      "gender_age",
+      "size",
+      "quantity",
+      "unit_price"
+    ],
+    "target_column": "quantity",
+    "date_column": "order_date",
+    "train_years": [
+      2020,
+      2021,
+      2022,
+      2023,
+      2024
+    ],
+    "test_years": [
+      2025,
+      2026
+    ],
+    "groupby_keys": [
+      "year",
+      "season",
+      "uniform_set",
+      "product_category",
+      "size"
+    ]
+  },
+  "solver_hint": "multi_product_newsvendor_two_period",
+  "lifecycle_year": 2,
+  "sizes": [
+    "YXS",
+    "YS",
+    "YM",
+    "YL",
+    "YXL",
+    "AS",
+    "AM",
+    "AL",
+    "AXL",
+    "WXS",
+    "WS",
+    "WM",
+    "WL",
+    "WXL"
+  ],
+  "product_categories": [
+    "top",
+    "bottom",
+    "socks"
+  ],
+  "seasons": [
+    "fall",
+    "winter",
+    "spring",
+    "cfa"
+  ]
+}

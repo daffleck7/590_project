@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Results — CFA Optimization Agent</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+</head>
+<body>
+    <div class="results-page">
+        <div class="report-header">
+            <h1>> cfa-optimization-agent</h1>
+            <span class="run-id">run/{{ run_id }}</span>
+        </div>
+        <div class="report-content" id="reportContent">
+            <p class="loading-text">Loading report...</p>
+        </div>
+    </div>
+
+    <script>
+    async function loadReport(runId) {
+        var resp = await fetch("/run/" + runId + "/data");
+        if (!resp.ok) {
+            document.getElementById("reportContent").innerHTML =
+                '<p class="error-text">Failed to load results.</p>';
+            return;
+        }
+
+        var data = await resp.json();
+
+        if (data.report) {
+            document.getElementById("reportContent").innerHTML = marked.parse(data.report);
+        } else {
+            document.getElementById("reportContent").innerHTML =
+                '<p class="error-text">No report available. The explanation agent may not have completed.</p>';
+        }
+    }
+
+    loadReport("{{ run_id }}");
+    </script>
+</body>
+</html>

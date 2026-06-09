@@ -34,6 +34,7 @@ def execute_code(code: str, work_dir: Path, timeout: int = 30) -> SandboxResult:
     Returns:
         SandboxResult with success status, stdout, stderr, and error info.
     """
+    work_dir = Path(work_dir).resolve()
     work_dir.mkdir(parents=True, exist_ok=True)
 
     script_path = work_dir / "_sandbox_script.py"
@@ -41,11 +42,12 @@ def execute_code(code: str, work_dir: Path, timeout: int = 30) -> SandboxResult:
 
     try:
         result = subprocess.run(
-            [sys.executable, str(script_path)],
+            [sys.executable, str(script_path.resolve())],
             capture_output=True,
             text=True,
             timeout=timeout,
             cwd=str(work_dir),
+            env={**__import__("os").environ, "PYTHONIOENCODING": "utf-8"},
         )
         return SandboxResult(
             success=result.returncode == 0,
