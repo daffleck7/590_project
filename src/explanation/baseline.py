@@ -69,8 +69,17 @@ def baseline_comparison(
     if test_years is None:
         test_years = [2025, 2026]
 
-    co_mult = float(config.cost_structure.get("overage_cost_multiplier", 1.0))
-    cu_mult = float(config.cost_structure.get("underage_cost_multiplier", 1.3))
+    cs = config.cost_structure
+    if isinstance(cs, dict):
+        co_mult = float(cs.get("overage_cost_multiplier", 1.0))
+        cu_mult = float(cs.get("underage_cost_multiplier", 1.3))
+    else:
+        co_mult, cu_mult = 1.0, 1.3
+        for item in cs:
+            if "overage" in item.name.lower():
+                co_mult = float(item.value)
+            elif "underage" in item.name.lower():
+                cu_mult = float(item.value)
 
     baseline_qtys = compute_baseline_quantities(demand_df, train_years)
     test_df = demand_df[demand_df["year"].isin(test_years)].copy().reset_index(drop=True)

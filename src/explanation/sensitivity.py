@@ -52,8 +52,17 @@ def sensitivity_analysis(
     if shifts is None:
         shifts = [-0.3, -0.2, -0.1, 0.0, 0.1, 0.2, 0.3]
 
-    co_mult_base = float(config.cost_structure.get("overage_cost_multiplier", 1.0))
-    cu_mult_base = float(config.cost_structure.get("underage_cost_multiplier", 1.3))
+    cs = config.cost_structure
+    if isinstance(cs, dict):
+        co_mult_base = float(cs.get("overage_cost_multiplier", 1.0))
+        cu_mult_base = float(cs.get("underage_cost_multiplier", 1.3))
+    else:
+        co_mult_base, cu_mult_base = 1.0, 1.3
+        for item in cs:
+            if "overage" in item.name.lower():
+                co_mult_base = float(item.value)
+            elif "underage" in item.name.lower():
+                cu_mult_base = float(item.value)
 
     base_cost = _total_cost(order_quantities, demand_df, co_mult_base, cu_mult_base)
 

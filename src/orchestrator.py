@@ -257,6 +257,10 @@ class Orchestrator:
 
         cleaned_path, manifest = await self.run_cleaning(config)
 
+        if cleaned_path:
+            await self.run_modeling(config, cleaned_path)
+            await self.run_explanation()
+
         self.trace["activity_log"] = self.activity_log
         save_trace(self.run_dir, self.trace)
 
