@@ -55,7 +55,55 @@ Do not skip or merge sections. Each section is graded.
 - Which solver won and why?
 - How does the solution satisfy constraints?
 
-### 6. Agent Architecture
+### 6. Stakeholder Modification — Joint Two-Period Formulation (Model A vs Model B)
+
+This section addresses the professor's stakeholder modification requiring a joint
+two-period optimizer. Read `joint_formulation_summary.json` and
+`joint_comparison_table.csv` if they exist.
+
+#### 6a. What Changed and Why
+- Explain Model A (independent newsvendor): Year 1 and Year 2 solved separately.
+  Year 1 overage is penalised as waste.
+- Explain Model B (joint with carryover): Year 1 surplus carries to Year 2 at zero
+  cost. Carryover inventory I_s = (q1_s − D1_s)+ reduces Year 2 procurement and
+  hedges against the high Year 2 discontinued-model stockout cost.
+- Write the joint SAA objective exactly as given in the stakeholder document.
+- Explain why Year 1 overage does NOT appear in the Model B objective.
+
+#### 6b. Comparison Table
+If `joint_comparison_table.csv` exists, show a Markdown table with:
+- Product category, size, season
+- Year 1 qty under Model A vs Model B (and difference)
+- Year 2 qty under Model A vs Model B (and difference)
+- Expected carryover E[I_s] under Model B
+
+#### 6c. Answers to the Four Stakeholder Questions
+Pull answers from `joint_formulation_summary.json` and expand them into full
+analytical paragraphs. Address each question explicitly with numbers:
+
+**Q1 — Does Model B order more or less in Year 1? Why?**
+Report total Y1 quantity change and explain the economic intuition: in Model B,
+Year 1 surplus has option value (it becomes free Year 2 supply), so the optimizer
+over-orders in Y1 compared to Model A which treats Y1 overage as pure waste.
+
+**Q2 — How much does Year 2 procurement change? Which sizes drive the largest shift?**
+Report the total Y2 quantity change and expected carryover. Identify the specific
+sizes (from the comparison table) with the largest Y2 reduction due to carryover.
+
+**Q3 — What is the cost of myopia? Is it large enough to matter?**
+Report the cost difference (Model A − Model B) in dollars and percentage.
+Interpret the practical significance for the league president.
+
+**Q4 — Does the best prediction model selection change between A and B?**
+The joint newsvendor objective re-weights errors differently: Year 2 underage is
+much more expensive (discontinued model), so models that better predict Year 2
+demand gain importance under Model B. Discuss whether the winner changes and why.
+
+#### 6d. Shadow Prices
+Compare shadow prices on the Year-1 budget constraint under Model A and Model B.
+Interpret: what does each $1 of additional Year-1 budget save in total expected cost?
+
+### 7. Agent Architecture
 - Describe the 4-agent pipeline: Intake → Data Cleaning → Modeling → Explanation.
 - For each agent: what it does, what tools it has, what it produces.
 - Explain the harness (FastAPI orchestrator): how agents are coordinated, \
@@ -65,21 +113,21 @@ Do not skip or merge sections. Each section is graded.
   why deterministic Python for prediction/optimization, sandbox execution, \
   verification loops.
 
-### 7. Recommended Decision
+### 8. Recommended Decision
 - A FULL TABLE of recommended order quantities from `best_optimizer_order_plan.csv`. \
   Format as a Markdown table with key grouping columns and recommended qty and spend. \
   Include EVERY row — this is the primary deliverable. Do not truncate.
 - Summary totals by product category.
 - Total spend and how it compares to the budget constraint.
 
-### 8. Sensitivity Analysis
+### 9. Sensitivity Analysis
 - If `sensitivity_results.json` exists, format the results showing how total cost \
   changes when overage and underage cost parameters shift by -30% to +30%.
 - If the file doesn't exist, note that sensitivity analysis was not completed \
   and describe what it WOULD show (which cost parameter the decision is most \
   sensitive to, based on the cost structure in the config).
 
-### 9. Baseline Comparison
+### 10. Baseline Comparison
 - If `baseline_results.json` exists, show agent cost vs baseline cost (historical \
   average ordering), savings in $ and %, and breakdown by category.
 - If the file doesn't exist, compute and describe the comparison conceptually: \
@@ -87,13 +135,13 @@ Do not skip or merge sections. Each section is graded.
   quantity. Explain why the agent should outperform this (cost-aware optimization \
   vs cost-blind averaging).
 
-### 10. Managerial Recommendations
+### 11. Managerial Recommendations
 - Translate the technical results into actionable business advice.
 - What should the decision-maker DO with this output?
 - What should they monitor going forward?
 - When should they re-run the agent (e.g., after new season data)?
 
-### 11. Limitations and Future Improvements
+### 12. Limitations and Future Improvements
 - What assumptions could be wrong?
 - What data limitations affect the results?
 - What would improve the agent? (more data, better features, different models, \
