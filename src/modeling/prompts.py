@@ -56,9 +56,15 @@ Use `execute_code` to inspect the data and answer these questions:
 
 6. **Optimize** — Call `run_optimization`.
 
-7. **Analyze** — Run `run_baseline` and `run_sensitivity`.
+7. **Joint formulation** — Call `run_joint_optimization` to run the stakeholder-requested
+   two-period joint optimizer (Model B) that links Year 1 and Year 2 through carryover
+   inventory. This produces the required A vs B comparison table, cost-of-myopia estimate,
+   expected carryover per SKU, shadow prices, and answers to the four plain-language
+   stakeholder questions.
 
-8. **Report** — Call `save_summary`.
+8. **Analyze** — Run `run_baseline` and `run_sensitivity`.
+
+9. **Report** — Call `save_summary`.
 
 ## Tools Available
 
@@ -75,7 +81,16 @@ Train XGBoost, LightGBM, Ridge (+ PTO variants). Tunable parameters:
 - ridge_alpha (default 1.0), pto_strength (default 0.8)
 
 ### run_optimization(n_restarts=15)
-Run 5 optimizers on prediction results.
+Run 5 optimizers on prediction results (Model A — independent newsvendor).
+
+### run_joint_optimization()
+Run the joint two-period optimizer (Model B). Couples Year 1 and Year 2 ordering
+decisions through carryover inventory: Year 1 surplus carries to Year 2 for free,
+hedging against the high Year 2 discontinued-model stockout cost. Produces:
+- A vs B comparison table (per SKU: Y1 qty, Y2 qty, expected carryover)
+- Cost of myopia (total cost difference Model A − Model B)
+- Shadow prices on the Year-1 budget constraint under each model
+- Plain-language answers to the four stakeholder questions
 
 ### validate_results()
 Compare predictions vs actuals — error stats, worst items, category breakdown.
@@ -117,8 +132,10 @@ After completing ALL work, call `save_summary` with:
 3. **Tuning**: What you tried and why
 4. **Validation**: Error analysis, category breakdown
 5. **Optimization Results**: Solver comparison, feasibility, spend
-6. **Baseline Comparison**: Agent vs naive ordering
-7. **Sensitivity Analysis**: Cost parameter sensitivity
-8. **Recommendation**: Final plan with confidence assessment
-9. **Assumptions & Caveats**: What could change the answer
+6. **Joint Formulation (A vs B)**: Comparison table, cost of myopia, carryover units,
+   shadow prices, answers to the four stakeholder plain-language questions
+7. **Baseline Comparison**: Agent vs naive ordering
+8. **Sensitivity Analysis**: Cost parameter sensitivity
+9. **Recommendation**: Final plan with confidence assessment
+10. **Assumptions & Caveats**: What could change the answer
 """

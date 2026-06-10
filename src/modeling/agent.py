@@ -22,6 +22,7 @@ from src.models.problem_config import ProblemConfig
 from src.models.data_module import DataModule
 from src.models.prediction_module import add_prediction, PredictionParams
 from src.models.all_optimizers_combined_final import compare_optimizers
+from src.models.joint_optimizer import compare_formulations as run_joint_comparison
 from src.explanation.sensitivity import sensitivity_analysis
 from src.explanation.baseline import baseline_comparison
 from src.data_ingestion.sandbox import execute_code
@@ -172,6 +173,67 @@ def _build_mcp_server(
             best.order_plan.head(10).to_string(),
         ])
 
+        return {"content": [{"type": "text", "text": "\n".join(lines)}]}
+
+    async def _run_joint_optimization(args: dict) -> dict:
+        """Run joint two-period optimizer (Model B) and produce A vs B comparison."""
+        if state["prediction_result"] is None:
+            return {
+                "content": [{"type": "text", "text": "Error: call run_prediction first"}],
+                "isError": True,
+            }
+
+        comparison = run_joint_comparison(
+            state["prediction_result"], config, verbose=False
+        )
+
+        run_path = Path(run_dir)
+        import json as _json
+        import pandas as pd
+
+        # Save comparison table
+        comparison["comparison_table"].to_csv(
+            run_path / "joint_comparison_table.csv", index=False
+        )
+
+        # Save summary (make numpy values serializable)
+        def _to_py(obj):
+            if isinstance(obj, (np.integer,)):
+                return int(obj)
+            if isinstance(obj, (np.floating,)):
+                return float(obj)
+            if isinstance(obj, np.ndarray):
+                return obj.tolist()
+            return obj
+
+        summary_ser = {
+            k: (_to_py(v) if not isinstance(v, dict) else {kk: _to_py(vv) for kk, vv in v.items()})
+            for k, v in comparison["summary"].items()
+        }
+        (run_path / "joint_formulation_summary.json").write_text(
+            _json.dumps(summary_ser, indent=2), encoding="utf-8"
+        )
+
+        s = comparison["summary"]
+        ma, mb = comparison["model_a"], comparison["model_b"]
+        lines = [
+            "=== Model A vs Model B Comparison ===",
+            "",
+            f"Model A (Independent): ${ma.objective_value:,.2f}  spend=${ma.total_spend:,.2f}  feasible={ma.feasible}",
+            f"Model B (Joint):       ${mb.objective_value:,.2f}  y1=${mb.y1_spend:,.2f}  y2=${mb.y2_spend:,.2f}  feasible={mb.feasible}",
+            "",
+            f"Cost of myopia: ${s['cost_of_myopia_usd']:,.2f}  ({s['cost_reduction_pct']:.1f}% reduction)",
+            f"Expected total carryover: {s['total_expected_carryover_units']:.0f} units",
+            f"Y1 shadow price  —  Model A: ${s['model_a_y1_shadow_price']:.4f}/budget-$  |  Model B: ${s['model_b_y1_shadow_price']:.4f}/budget-$",
+            "",
+            "Plain-language answers:",
+            f"  Q1 (Y1 direction): {s['plain_language_answers']['q1_y1_direction']}",
+            f"  Q2 (Y2 procurement): {s['plain_language_answers']['q2_y2_procurement_change']}",
+            f"  Q3 (cost of myopia): {s['plain_language_answers']['q3_cost_of_myopia']}",
+            f"  Q4 (model selection): {s['plain_language_answers']['q4_model_selection']}",
+            "",
+            "Saved: joint_comparison_table.csv, joint_formulation_summary.json",
+        ]
         return {"content": [{"type": "text", "text": "\n".join(lines)}]}
 
     async def _execute_code_handler(args: dict) -> dict:
@@ -441,11 +503,22 @@ def _build_mcp_server(
         {"summary": str},
     )(_save_summary)
 
+    joint_tool = tool(
+        "run_joint_optimization",
+        "Run the joint two-period optimizer (Model B) that couples Year 1 and Year 2 "
+        "ordering decisions through carryover inventory. Produces an A vs B comparison "
+        "table, cost-of-myopia estimate, expected carryover per SKU, shadow prices, "
+        "and plain-language answers to the four stakeholder questions. "
+        "Must call run_prediction first. "
+        "Saves joint_comparison_table.csv and joint_formulation_summary.json.",
+        {},
+    )(_run_joint_optimization)
+
     return create_sdk_mcp_server(
         "modeling-tools",
         tools=[
             load_tool, predict_tool, optimize_tool,
-            validate_tool, sensitivity_tool, baseline_tool,
+            joint_tool, validate_tool, sensitivity_tool, baseline_tool,
             exec_tool, summary_tool,
         ],
     )
