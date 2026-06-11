@@ -688,20 +688,20 @@ def _build_summary(
         "plain_language_answers": {
             "q1_y1_direction": (
                 f"The joint model orders {y1_direction} in Year 1 than the independent model "
-                f"({y1_diff_total:+d} units total). "
+                f"({int(y1_diff_total):+d} units total). "
                 "In the joint model, Year 1 surplus is not penalised — it carries to Year 2 for "
                 "free, providing a hedge against the much higher Year 2 stockout cost after the "
                 "model is discontinued. This option value makes over-ordering in Year 1 rational."
                 if y1_diff_total >= 0 else
                 f"The joint model orders {y1_direction} in Year 1 than the independent model "
-                f"({y1_diff_total:+d} units total). "
+                f"({int(y1_diff_total):+d} units total). "
                 "When Year 1 overage is no longer penalised, the optimizer may still reduce Y1 "
                 "orders if the binding budget in Y1 is better allocated to high-cost categories, "
                 "relying on carryover to cover Y2 demand rather than direct Y2 procurement."
             ),
             "q2_y2_procurement_change": (
                 f"Expected carryover is {model_b.expected_carryover.sum():.0f} units total. "
-                f"Year 2 direct procurement changes by {comparison_table['y2_qty_diff'].sum():+d} "
+                f"Year 2 direct procurement changes by {int(comparison_table['y2_qty_diff'].sum()):+d} "
                 "units — carryover replaces some of the direct Year 2 order. "
                 f"Sizes driving the largest shift: {largest_y2_shift}."
                 if "y2_qty_diff" in comparison_table.columns else
