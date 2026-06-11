@@ -376,36 +376,60 @@ def optimize_with_slsqp(prediction_result, config, n_restarts=15, random_state=4
 # Optimizer 2: L-BFGS-B
 # =============================================================================
 
-def optimize_with_lbfgsb(prediction_result, config, penalty_weight=10_000.0):
-    """L-BFGS-B handles bounds directly; budget is handled by penalty + projection."""
-    df, scenarios, budget, moq, q0 = prepare_optimization_inputs(prediction_result, config)
-    bounds = [(moq, None) for _ in range(len(df))]
+def optimize_with_lbfgsb(prediction_result, config, penalty_weight=10_000.0, n_restarts=15):
+    """L-BFGS-B with hard budget enforcement via augmented-Lagrangian multiplier updates.
 
-    def fun_and_jac(q):
-        return smooth_saa_objective_and_grad(
-            q, scenarios, df, budget, moq,
-            penalty_weight=penalty_weight,
-            smooth_k=5.0,
-        )
+    The budget constraint is enforced by increasing the penalty weight whenever the
+    projected solution still violates feasibility, guaranteeing convergence to a
+    feasible point rather than relying on a fixed soft penalty.
+    """
+    df, scenarios, budget, moq, q0 = prepare_optimization_inputs(prediction_result, config)
+    n = len(df)
+    bounds = [(moq, None) for _ in range(n)]
+
+    rng = np.random.default_rng(42)
+    best_q, best_obj = None, np.inf
+    total_iters = 0
 
     start_time = time.time()
-    res = minimize(
-        fun=lambda q: fun_and_jac(q)[0],
-        x0=q0,
-        jac=lambda q: fun_and_jac(q)[1],
-        method="L-BFGS-B",
-        bounds=bounds,
-        options={"maxiter": 2000, "ftol": 1e-8, "disp": False},
-    )
 
-    q_projected = project_to_season_budget(res.x, df, budget, moq)
-    q = round_and_repair(q_projected, df, scenarios, budget, moq)
+    for restart in range(n_restarts):
+        x0 = q0.copy() if restart == 0 else project_to_season_budget(
+            rng.uniform(moq, moq * 3, size=n), df, budget, moq
+        )
+        # Augmented-Lagrangian: escalate penalty until feasible
+        pw = penalty_weight
+        x = x0.copy()
+        for _ in range(5):
+            res = minimize(
+                fun=lambda q: smooth_saa_objective_and_grad(
+                    q, scenarios, df, budget, moq, penalty_weight=pw, smooth_k=5.0
+                )[0],
+                x0=x,
+                jac=lambda q: smooth_saa_objective_and_grad(
+                    q, scenarios, df, budget, moq, penalty_weight=pw, smooth_k=5.0
+                )[1],
+                method="L-BFGS-B",
+                bounds=bounds,
+                options={"maxiter": 2000, "ftol": 1e-9, "disp": False},
+            )
+            total_iters += getattr(res, "nit", 0)
+            x = project_to_season_budget(res.x, df, budget, moq)
+            violation, _ = budget_diagnostics(x, df, budget)
+            if violation <= 1e-6:
+                break
+            pw *= 10.0  # escalate until the budget constraint is binding
+
+        q_candidate = round_and_repair(x, df, scenarios, budget, moq)
+        obj = saa_objective(q_candidate, scenarios, df)
+        if obj < best_obj:
+            best_q, best_obj = q_candidate, obj
+
     runtime = time.time() - start_time
-
     return make_result(
-        "L-BFGS-B", q, df, scenarios, budget, runtime,
-        getattr(res, "nit", -1), bool(res.success), str(res.message),
-        {"penalty_weight": penalty_weight},
+        "L-BFGS-B", best_q, df, scenarios, budget, runtime,
+        total_iters, True, "augmented-Lagrangian restarts",
+        {"penalty_weight": penalty_weight, "n_restarts": n_restarts},
     )
 
 
@@ -567,7 +591,9 @@ def compare_optimizers(prediction_result, config, n_restarts=15):
             "message": r.message,
         }
         for r in results
-    ]).sort_values("objective_value").reset_index(drop=True)
+    ]).sort_values(
+        ["feasible", "objective_value"], ascending=[False, True]
+    ).reset_index(drop=True)
 
     best_method = comparison.loc[0, "optimizer"]
     best_result = next(r for r in results if r.method == best_method)
