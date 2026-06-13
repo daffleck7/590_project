@@ -1,10 +1,10 @@
 {
-  "problem_description": "CFA youth soccer league in Orange County processes 2,000–3,000 uniform orders per season across jerseys, shorts, and socks in 14 size codes. Orders must be placed before demand is realized. The current Adidas jersey model (Tiro 25) is in its final lifecycle year — unsold inventory cannot be reordered next season. Minimize total cost across overage, underage, and procurement subject to a seasonal budget and supplier minimum order quantities.",
-  "problem_title": "CFA Uniform Ordering Optimization — Tiro 25 Year 2",
+  "problem_description": "CFA youth soccer league in Orange County processes 2,000ï¿½3,000 uniform orders per season across jerseys, shorts, and socks in 14 size codes. Orders must be placed before demand is realized. The current Adidas jersey model (Tiro 25) is in its final lifecycle year ï¿½ unsold inventory cannot be reordered next season. Minimize total cost across overage, underage, and procurement subject to a seasonal budget and supplier minimum order quantities.",
+  "problem_title": "CFA Uniform Ordering Optimization ï¿½ Tiro 25 Year 2",
   "decision_variables": [],
   "objective": {
     "direction": "minimize",
-    "description": "Minimize total expected newsvendor cost across all 14 sizes × 3 product categories × upcoming seasons — weighted by lifecycle year cost structure (Year 2 underage penalty is ~5x higher than Year 1 due to jersey discontinuation).",
+    "description": "Minimize total expected newsvendor cost across all 14 sizes ï¿½ 3 product categories ï¿½ upcoming seasons ï¿½ weighted by lifecycle year cost structure (Year 2 underage penalty is ~5x higher than Year 1 due to jersey discontinuation).",
     "metric_name": "total_newsvendor_cost"
   },
   "constraints": [
@@ -13,8 +13,8 @@
       "description": "Total procurement spend per season cannot exceed league budget",
       "type": "hard",
       "parameters": {
-        "budget_usd": 8000,
-        "note": "Estimated from proposal — update with real budget"
+        "budget_usd": 40000,
+        "note": "Estimated from proposal ï¿½ update with real budget"
       }
     },
     {
@@ -315,7 +315,7 @@
       "name": "overage_cost",
       "value": 15.0,
       "unit": "USD/unit",
-      "description": "Year 2: sold on eBay at loss — salvage discount + fees",
+      "description": "Year 2: sold on eBay at loss ï¿½ salvage discount + fees",
       "lifecycle_year": 2,
       "product_category": "top"
     },
@@ -331,7 +331,7 @@
       "name": "underage_cost",
       "value": 60.0,
       "unit": "USD/unit",
-      "description": "Year 2: discontinued model — secondhand premium or lost sale + parent unhappy",
+      "description": "Year 2: discontinued model ï¿½ secondhand premium or lost sale + parent unhappy",
       "lifecycle_year": 2,
       "product_category": "top"
     },
@@ -347,7 +347,7 @@
       "name": "overage_cost",
       "value": 3.0,
       "unit": "USD/unit",
-      "description": "Low holding cost — shorts not size-critical",
+      "description": "Low holding cost ï¿½ shorts not size-critical",
       "lifecycle_year": 1,
       "product_category": "bottom"
     },
@@ -371,7 +371,7 @@
       "name": "underage_cost",
       "value": 25.0,
       "unit": "USD/unit",
-      "description": "Discontinued shorts — harder to source",
+      "description": "Discontinued shorts ï¿½ harder to source",
       "lifecycle_year": 2,
       "product_category": "bottom"
     },
@@ -387,7 +387,7 @@
       "name": "overage_cost",
       "value": 1.0,
       "unit": "USD/unit",
-      "description": "Socks easy to carry — minimal overage cost",
+      "description": "Socks easy to carry ï¿½ minimal overage cost",
       "lifecycle_year": null,
       "product_category": "socks"
     },
@@ -395,7 +395,7 @@
       "name": "underage_cost",
       "value": 5.0,
       "unit": "USD/unit",
-      "description": "Generic socks — easier to source at premium",
+      "description": "Generic socks ï¿½ easier to source at premium",
       "lifecycle_year": null,
       "product_category": "socks"
     }

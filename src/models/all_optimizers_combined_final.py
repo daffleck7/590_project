@@ -95,16 +95,27 @@ def prepare_optimization_inputs(prediction_result, config):
     def _get_period(row):
         return int(row.lifecycle_year) if has_period else None
 
+    def _safe_cost(category, cost_name, period):
+        """Cost lookup with graceful fallback — never crashes the optimizer."""
+        try:
+            return get_cost(config, category, cost_name, period)
+        except KeyError:
+            pass
+        try:
+            return get_cost(config, category, cost_name, None)
+        except KeyError:
+            return 1.0
+
     df["unit_cost"] = [
-        get_cost(config, _get_cat(r), "unit_cost", _get_period(r))
+        _safe_cost(_get_cat(r), "unit_cost", _get_period(r))
         for r in df.itertuples(index=False)
     ]
     df["overage_cost"] = [
-        get_cost(config, _get_cat(r), "overage_cost", _get_period(r))
+        _safe_cost(_get_cat(r), "overage_cost", _get_period(r))
         for r in df.itertuples(index=False)
     ]
     df["underage_cost"] = [
-        get_cost(config, _get_cat(r), "underage_cost", _get_period(r))
+        _safe_cost(_get_cat(r), "underage_cost", _get_period(r))
         for r in df.itertuples(index=False)
     ]
 

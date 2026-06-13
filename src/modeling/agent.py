@@ -587,7 +587,7 @@ async def run_modeling_agent(
         mcp_servers={"modeling": mcp_server},
         allowed_tools=[],
         permission_mode="bypassPermissions",
-        max_turns=30,
+        max_turns=50,
     )
 
     async with ClaudeSDKClient(options=options) as client:

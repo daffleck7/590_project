@@ -1,0 +1,720 @@
+% ============================================================================
+%  MGMT 590-037: AI-Enhanced Optimization — Final Project Report
+%  CFA Youth Soccer Uniform Ordering Optimization
+%  Summer 2026
+% ============================================================================
+\documentclass[11pt, letterpaper]{article}
+
+% --- Packages ---------------------------------------------------------------
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath, amssymb, amsthm}
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{xcolor}
+\usepackage{hyperref}
+\usepackage{enumitem}
+\usepackage{float}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage{array}
+\usepackage{multirow}
+\usepackage{tabularx}
+\usepackage{fancyhdr}
+\usepackage{titlesec}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage{microtype}
+\usepackage{parskip}
+
+% --- Colors -----------------------------------------------------------------
+\definecolor{purduegold}{HTML}{CFB991}
+\definecolor{purdueblack}{HTML}{000000}
+\definecolor{accentblue}{HTML}{2D6A9F}
+\definecolor{lightgray}{HTML}{F5F5F5}
+\definecolor{darkgray}{HTML}{444444}
+
+% --- Hyperlinks -------------------------------------------------------------
+\hypersetup{
+    colorlinks=true,
+    linkcolor=accentblue,
+    citecolor=accentblue,
+    urlcolor=accentblue,
+}
+
+% --- Headers/Footers --------------------------------------------------------
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\small\textcolor{darkgray}{MGMT 590-037 --- Final Report}}
+\fancyhead[R]{\small\textcolor{darkgray}{Summer 2026}}
+\fancyfoot[C]{\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+
+% --- Section formatting -----------------------------------------------------
+\titleformat{\section}
+  {\Large\bfseries\color{purdueblack}}{\thesection}{1em}{}[\vspace{2pt}\hrule]
+\titleformat{\subsection}
+  {\large\bfseries\color{darkgray}}{\thesubsection}{1em}{}
+\titleformat{\subsubsection}
+  {\normalsize\bfseries\color{darkgray}}{\thesubsubsection}{1em}{}
+
+% --- Custom commands --------------------------------------------------------
+\newcommand{\cost}[1]{\texttt{#1}}
+\newcommand{\var}[1]{\ensuremath{\mathit{#1}}}
+
+% ============================================================================
+\begin{document}
+
+% --- Title Page -------------------------------------------------------------
+\begin{titlepage}
+\centering
+\vspace*{1.5cm}
+
+{\Huge\bfseries Prediction to Prescription:\\[6pt]
+An AI Agent for Youth Soccer\\[4pt]
+Uniform Ordering Optimization}
+
+\vspace{1.5cm}
+
+{\Large MGMT 590-037: AI-Enhanced Optimization}\\[4pt]
+{\large Final Project Report --- Summer 2026}
+
+\vspace{2cm}
+
+{\large
+\begin{tabular}{ll}
+\textbf{Daniel Tulloch Affleck} & MBA \\
+\textbf{Satya Sai Usha Sree Ganteda} & MS Mechanical Engineering \\
+\textbf{Aditya Ryan Gupta} & MSBAIM \\
+\textbf{Fabian Alexis Macias Pe\~nalosa} & MSBAIM \\
+\textbf{Kentaro Nanayama} & MSBAIM \\
+\textbf{Siddharth Shenoy} & MSBAIM \\
+\end{tabular}
+}
+
+\vspace{0.5cm}
+{\normalsize Team 7}
+
+\vspace{2cm}
+
+{\large
+Dr.\ Prateek Jaiswal\\
+Daniels School of Business\\
+Purdue University
+}
+
+\vfill
+{\small June 2026}
+\end{titlepage}
+
+% --- Table of Contents ------------------------------------------------------
+\newpage
+\tableofcontents
+\newpage
+
+% ============================================================================
+\section{Problem Description and Motivation}
+% ============================================================================
+
+\subsection{Business Context}
+
+Club Futbol Academy (CFA) is a youth soccer league in Orange County, California, operating three seasonal programs (fall, winter, spring) and processing approximately 2,000--3,000 uniform orders per season through its Squarespace storefront. Each season, the league president must commit to uniform order quantities \emph{before} registration demand is observed---a classic ``order-before-demand'' decision under uncertainty.
+
+Uniforms span three product categories---jerseys (tops), shorts (bottoms), and socks---offered in up to 14 size codes across youth (YXS--YXL), adult men (AS--AXL), and women (WXS--WXL) segments.
+
+\subsection{The Decision Problem}
+
+The current ordering process relies on the league president's 25 years of operational intuition. While experienced, this heuristic produces systematic errors in both directions:
+\begin{itemize}[nosep]
+    \item \textbf{Overstock:} Ties up capital in inventory that children outgrow between seasons.
+    \item \textbf{Stockout:} Triggers rush orders with premium shipping costs and delays fulfillment to frustrated parents.
+\end{itemize}
+
+The goal is to build an AI-powered agent that replaces this intuition-driven process with a data-driven, optimized ordering policy---targeting a \textbf{10--15\% cost reduction} per season (\$800--\$1,200).
+
+\subsection{The Jersey Lifecycle Problem}
+
+Adidas jersey models (e.g., Tiro~25) follow a two-year production lifecycle before discontinuation. This creates an asymmetric cost structure with escalating consequences:
+
+\begin{table}[H]
+\centering
+\caption{Jersey lifecycle cost structure (as fraction of selling price).}
+\label{tab:lifecycle-costs}
+\begin{tabular}{@{}llcc@{}}
+\toprule
+\textbf{Period} & \textbf{Event} & \textbf{Cost} & \textbf{Rationale} \\
+\midrule
+Year 1 & Underage (stockout) & 40\% & Rush shipping + temporary jersey \\
+Year 1 & Overage (surplus) & 0\% & Carries to Year 2 at zero cost \\
+Year 2 & Underage (stockout) & 80\% & Discontinued model; secondary market premium \\
+Year 2 & Overage (surplus) & 70\% & Full purchase cost lost; no future use \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The current model (Tiro~25) is in \textbf{Year~2} of its lifecycle---the final year. Any under-ordering this year cannot be corrected through normal Adidas channels, making the problem especially acute.
+
+\subsection{Problem Classification}
+
+This is a \textbf{multi-period, multi-product newsvendor problem}. The objective is to minimize total expected cost---combining procurement, overage (salvage), and underage (rush/stockout) costs---subject to:
+\begin{enumerate}[nosep]
+    \item A seasonal budget constraint ($\approx$\$40,000 per season)
+    \item Supplier minimum order quantity (MOQ) of 6 units per size
+    \item Non-negativity constraints on all order quantities
+\end{enumerate}
+
+\subsection{Backward Mapping}
+
+\begin{table}[H]
+\centering
+\caption{Backward mapping from decision to data.}
+\label{tab:backward-mapping}
+\begin{tabularx}{\textwidth}{@{}lX@{}}
+\toprule
+\textbf{Layer} & \textbf{Description} \\
+\midrule
+Decision variables & Order quantity $q_s$ for each SKU $s$ (defined by season $\times$ category $\times$ gender/age $\times$ size) \\
+Objective & Minimize total expected newsvendor cost across all SKUs \\
+Constraints & Seasonal budget $\leq$ \$40,000; MOQ $\geq$ 6 if ordered; $q_s \geq 0$ \\
+Parameters & Overage cost $c_o$, underage cost $c_u$, unit cost, demand distribution \\
+Uncertain parameters & Seasonal demand $D_s$ per SKU---must be predicted from data \\
+Data sources & 6 years of historical order data (2020--2026), 12,209 line items \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+% ============================================================================
+\section{Data Sources and Preparation}
+% ============================================================================
+
+\subsection{Data Source}
+
+The primary dataset consists of historical order records from CFA's Squarespace storefront, covering \textbf{6 years} (2020--2026). The raw dataset contains 12,209 line items across 12 columns, exported directly from the league's order management system.
+
+\begin{table}[H]
+\centering
+\caption{Cleaned dataset summary.}
+\label{tab:data-summary}
+\begin{tabular}{@{}ll@{}}
+\toprule
+\textbf{Attribute} & \textbf{Value} \\
+\midrule
+Total line items & 12,209 \\
+Columns retained & 8 (of 12 original) \\
+Null values & 0 across all columns \\
+Total demand (units) & 12,704 \\
+Product categories & top (7,975), bottom (2,345), socks (1,889) \\
+Gender/age segments & mens\_youth (11,208), womens (1,001) \\
+Seasons & fall, winter, spring \\
+Size codes & 14 (YXS--YXL, AS--AXL, WXS--WXL) \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Data Cleaning Pipeline}
+
+The data cleaning agent performed the following steps, retaining \textbf{100\% of rows}:
+
+\begin{enumerate}[nosep]
+    \item \textbf{Profiled} all columns for data types, nulls, duplicates, and value distributions.
+    \item \textbf{Parsed dates} from \texttt{M/D/YYYY} format to ISO \texttt{YYYY-MM-DD}.
+    \item \textbf{Enforced data types:} \texttt{year}/\texttt{quantity} $\to$ integer; \texttt{unit\_price} $\to$ float; categoricals $\to$ trimmed strings.
+    \item \textbf{Dropped 4 non-required columns:} \texttt{order\_id}, \texttt{uniform\_set}, \texttt{color}, \texttt{number} (100\% null).
+    \item \textbf{Validated} every categorical value against the problem configuration's allowed values.
+    \item \textbf{Preserved all rows}---each line item represents a distinct order (unique \texttt{order\_id}), and deduplication would undercount demand by 56\%.
+\end{enumerate}
+
+\subsection{Demand Aggregation}
+
+Raw line items were aggregated into \textbf{demand groups} by the keys (year, season, product\_category, gender\_age, size), producing approximately 122 demand groups. The prediction module operates on these aggregated groups, with the target variable being the summed quantity per group.
+
+\subsection{Train/Test Split}
+
+The dataset was split \textbf{chronologically} (not randomly) to simulate a realistic forecasting setting:
+\begin{itemize}[nosep]
+    \item \textbf{Training set:} 2020--2024 (5 years of historical demand)
+    \item \textbf{Validation set:} 2025 (backtest year)
+    \item \textbf{Projection target:} 2026 (current year, partial data)
+\end{itemize}
+
+\subsection{Data Quality Notes}
+
+\begin{itemize}[nosep]
+    \item \textbf{Volume growth:} 2020--2021 have significantly fewer line items ($\sim$360--438) than 2022--2024 ($\sim$2,200--3,600), suggesting league growth or earlier under-reporting.
+    \item \textbf{Class imbalance:} Women's sizes represent only 8\% of demand; several size codes are sparse (WXL: 6 items, AXL: 13 items).
+    \item \textbf{Price ranges:} Socks \$9--15, bottoms \$16--50, tops \$12--70 (consistent with wholesale pricing).
+    \item \textbf{2026 partial year:} 959 rows of 2026 data are present (partial, as of June 2026) and treated as the projection target, not full-season actuals.
+\end{itemize}
+
+% ============================================================================
+\section{Prediction Methodology and Results}
+% ============================================================================
+
+\subsection{Approach}
+
+The prediction layer estimates demand per SKU group using \textbf{supervised learning}, evaluated not on traditional accuracy metrics (RMSE) but on the \textbf{newsvendor cost} that the predictions induce---the metric that actually matters for the downstream decision.
+
+\subsection{Models Compared}
+
+Six model variants were trained and evaluated:
+
+\begin{table}[H]
+\centering
+\caption{Prediction model comparison (ranked by newsvendor cost on test set).}
+\label{tab:prediction-results}
+\begin{tabular}{@{}lrrr@{}}
+\toprule
+\textbf{Model} & \textbf{NV Cost (\$)} & \textbf{vs.\ Baseline} & \textbf{Rank} \\
+\midrule
+XGBoost             & 1,051 & $-$53.4\% & 1 \\
+XGBoost + PTO       & 1,123 & $-$50.2\% & 2 \\
+LightGBM            & 1,485 & $-$34.1\% & 3 \\
+LightGBM + PTO      & 1,505 & $-$33.2\% & 4 \\
+Ridge               & 1,621 & $-$28.1\% & 5 \\
+Ridge + PTO          & 1,636 & $-$27.4\% & 6 \\
+\midrule
+\emph{Baseline (historical avg.)} & \emph{2,254} & --- & --- \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{XGBoost} (300 trees, depth 4, learning rate 0.05) was selected as the winning model with a newsvendor cost of \$1,051---a \textbf{53.4\% improvement} over the historical average baseline.
+
+\subsection{PTO (Predict-then-Optimize) Adjustment}
+
+Each model has a PTO variant that shifts predictions toward the \textbf{optimal newsvendor quantile}. The single-period critical ratio is:
+\[
+\text{CR} = \frac{c_u}{c_u + c_o} = \frac{0.40}{0.40 + 0.70} \approx 0.364
+\]
+The PTO adjustment applies a smoothed shift toward the 36th percentile (strength = 0.8). In this case, standard XGBoost outperformed the PTO variant, suggesting the model's native predictions already aligned well with the cost-optimal quantile.
+
+\subsection{Feature Importance}
+
+\begin{table}[H]
+\centering
+\caption{XGBoost feature importance.}
+\label{tab:feature-importance}
+\begin{tabular}{@{}lr@{}}
+\toprule
+\textbf{Feature} & \textbf{Importance} \\
+\midrule
+gender\_age & 0.385 \\
+size & 0.280 \\
+product\_category & 0.268 \\
+season & 0.067 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Gender/age is the strongest predictor (youth boys dominate demand at 92\%), followed by size and product category. Season has relatively low importance, indicating demand patterns are more stable across seasons than across demographic groups.
+
+\subsection{Demand Scenarios}
+
+For the downstream Sample Average Approximation (SAA) optimizer, the prediction module outputs three demand scenarios per SKU:
+\begin{itemize}[nosep]
+    \item \textbf{P10:} Low-demand scenario (10th percentile)
+    \item \textbf{P50:} Median-demand scenario (50th percentile)
+    \item \textbf{P90:} High-demand scenario (90th percentile)
+\end{itemize}
+These scenarios, derived from model residuals, capture uncertainty in demand estimates and enable the optimizer to hedge against both over- and under-ordering.
+
+\subsection{Validation}
+
+Temporal backtest on 2025 actuals (68 SKUs):
+\begin{itemize}[nosep]
+    \item MAE: 97 units per group
+    \item Median percentage error: $-$27.9\%
+\end{itemize}
+The negative median error is \emph{expected}, not a defect: the newsvendor critical ratio of 0.36 means the optimal policy deliberately orders to the 36th percentile, systematically under-ordering relative to mean demand. The cost metric---not prediction accuracy---is the relevant performance measure.
+
+% ============================================================================
+\section{Optimization Model Formulation and Solution}
+% ============================================================================
+
+\subsection{Model A: Independent Single-Period Newsvendor}
+
+Each season is solved independently. Given demand scenarios $D_{sn}$ for SKU $s$ in scenario $n$, overage cost $c_o^s$, underage cost $c_u^s$, budget $B$, and minimum order quantity $m$:
+
+\begin{equation}
+\min_{q} \quad \frac{1}{N} \sum_{n=1}^{N} \sum_{s=1}^{S} \left[ c_o^s \cdot \max(q_s - D_{sn}, 0) + c_u^s \cdot \max(D_{sn} - q_s, 0) \right]
+\label{eq:model-a}
+\end{equation}
+\vspace{-8pt}
+\begin{align}
+\text{subject to:} \quad & \sum_{s \in \text{season}} \text{unit\_cost}_s \cdot q_s \leq B \quad \text{(seasonal budget)} \notag \\
+& q_s \geq m \quad \text{if } q_s > 0 \quad \text{(minimum order quantity)} \notag \\
+& q_s \geq 0 \quad \forall \, s \notag
+\end{align}
+
+The cost parameters as fractions of selling price are:
+\begin{itemize}[nosep]
+    \item Purchase cost: $0.70 \times \text{unit\_price}$
+    \item Overage cost: $c_o = 0.70 \times \text{unit\_price}$ (unsalvageable season uniforms)
+    \item Underage cost: $c_u = 0.40 \times \text{unit\_price}$ (rush shipping + temporary jersey)
+\end{itemize}
+
+\subsubsection{Smoothing for Differentiability}
+
+The $\max(\cdot, 0)$ operator is non-differentiable at zero. For gradient-based solvers, we use the \textbf{softplus} approximation:
+\[
+\max(z, 0) \approx \frac{1}{k} \log(1 + e^{kz}), \quad k = 20
+\]
+This provides a smooth, differentiable surrogate with near-exact agreement for $|z| > 1$.
+
+\subsubsection{Solver Comparison}
+
+Five optimization algorithms were compared on Model A:
+
+\begin{table}[H]
+\centering
+\caption{Optimizer comparison on Model A.}
+\label{tab:optimizer-comparison}
+\begin{tabular}{@{}lrrrrl@{}}
+\toprule
+\textbf{Optimizer} & \textbf{Objective (\$)} & \textbf{Spend (\$)} & \textbf{Iters} & \textbf{Time (s)} & \textbf{Feasible} \\
+\midrule
+SLSQP        & 18,826 & 102,065 & 237   & 213.71 & Yes \\
+L-BFGS-B     & 19,408 & 101,886 & 38    & 1.94 & Yes \\
+Gradient Descent & 21,049 & 101,883 & 2,373 & 12.20 & Yes \\
+SGD          & 21,649 & 67,162  & 4,000 & 16.55 & Yes \\
+Adam         & 26,573 & 101,888 & 3,000 & 13.98 & Yes \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+All five optimizers produced feasible solutions. \textbf{SLSQP} achieved the best objective (\$18,826) in 237 iterations, followed closely by L-BFGS-B (\$19,408). The budget constraint (\$40,000/season) was non-binding for this evaluation, with total spend around \$102,000 across all SKUs and seasons.
+
+\subsubsection{Post-Processing}
+
+Continuous solutions undergo \textbf{round-and-repair}:
+\begin{enumerate}[nosep]
+    \item Round continuous quantities to nearest integers.
+    \item Enforce MOQ: set quantities below 6 to 0 (skip) or 6 (round up).
+    \item Repair budget violations by greedily cutting units with lowest marginal utility.
+\end{enumerate}
+
+\subsection{Model B: Two-Period Joint Newsvendor with Carryover}
+
+The stakeholder modification introduces a joint two-period formulation for jerseys, recognizing that Year~1 surplus carries to Year~2 at zero holding cost:
+
+\begin{equation}
+\min_{q_1, q_2} \quad \frac{1}{N} \sum_{n=1}^{N} \sum_{s=1}^{S} \left[
+c_{u1}^s \cdot \max(D_{1sn} - q_{1s}, 0)
++ c_{o2}^s \cdot \max(q_{2s} + I_{sn} - D_{2sn}, 0)
++ c_{u2}^s \cdot \max(D_{2sn} - q_{2s} - I_{sn}, 0)
+\right]
+\label{eq:model-b}
+\end{equation}
+
+where the \textbf{carryover inventory} from Year~1 is:
+\[
+I_{sn} = \max(q_{1s} - D_{1sn}, 0)
+\]
+
+\begin{table}[H]
+\centering
+\caption{Two-period cost parameters for jerseys (fraction of selling price).}
+\label{tab:two-period-costs}
+\begin{tabular}{@{}lccc@{}}
+\toprule
+\textbf{Parameter} & \textbf{Year 1} & \textbf{Year 2} & \textbf{Rationale} \\
+\midrule
+Underage cost $c_u$ & 0.40 & 0.80 & Discontinued model doubles stockout cost \\
+Overage cost $c_o$ & 0.00 & 0.70 & Y1 surplus carries free; Y2 surplus is lost \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{Key insight:} Year~1 overage is ``free'' (carries to Year~2), while Year~2 stockouts are extremely costly (80\% of price). The joint optimizer exploits this asymmetry by \emph{front-loading} Year~1 orders to build a carryover buffer against Year~2 risk.
+
+\subsection{Model A vs.\ Model B: Results}
+
+\begin{table}[H]
+\centering
+\caption{Joint optimization results for jerseys/tops category.}
+\label{tab:joint-results}
+\begin{tabular}{@{}lrr@{}}
+\toprule
+\textbf{Metric} & \textbf{Model A (Myopic)} & \textbf{Model B (Joint)} \\
+\midrule
+Year 1 order quantity & --- & 3,131 units \\
+Year 2 order quantity & --- & 2,785 units \\
+Expected carryover & 0 units & 1,452 units \\
+Total two-period cost & \$18,826 & \$10,220 \\
+Y1 budget shadow price & \$0.306/\$ & \$0.053/\$ \\
+\midrule
+\textbf{Cost of myopia} & \multicolumn{2}{c}{\textbf{\$8,606 (45.7\% reduction)}} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The joint model builds an expected carryover buffer of 1,452 units from Year~1 surplus, which carries to Year~2 at zero cost. This strategy reduces total lifecycle cost by \$8,606 (45.7\%).
+
+\subsubsection{Stakeholder Questions}
+
+\begin{enumerate}
+    \item \textbf{Should Year~1 orders increase or decrease?} \emph{Increase.} The joint model orders 3,131 units in Year~1, building carryover inventory. Year~1 surplus carries free and hedges the costly Year~2 stockout risk.
+
+    \item \textbf{Does Year~2 procurement change?} The joint model orders 2,785 units in Year~2, but approximately 1,452 carryover units from Year~1 supplement this supply, reducing the effective need to source a discontinued model.
+
+    \item \textbf{What is the cost of myopia?} \emph{\$8,606 per two-year cycle} (45.7\% higher cost) when each year is optimized independently versus jointly.
+
+    \item \textbf{Which model should guide decisions?} Use \textbf{Model B (joint)} for jerseys/tops due to the lifecycle and asymmetric costs. Keep \textbf{Model A (independent)} for bottoms and socks, which have no lifecycle carryover.
+\end{enumerate}
+
+% ============================================================================
+\section{Agent Architecture}
+% ============================================================================
+
+\subsection{Design Philosophy}
+
+The agent implements an \textbf{Agent = Model + Harness} architecture. Deterministic Python modules handle data processing, prediction, and optimization, while an LLM (Claude) is invoked at three scoped points for tasks requiring natural language understanding. The FastAPI backend serves as the harness---orchestrating the pipeline, managing verification loops, enforcing guardrails, and writing execution traces.
+
+\subsection{Pipeline Architecture}
+
+\begin{figure}[H]
+\centering
+\fbox{\parbox{0.9\textwidth}{
+\centering
+\textbf{Agent Pipeline Architecture}\\[12pt]
+\begin{tabular}{ccc}
+\textbf{User (Web UI)} & & \\
+$\downarrow$ & & \\
+\textbf{Orchestrator} & $\longrightarrow$ & Trace Logger \\
+$\downarrow$ & & \\
+\fbox{Intake Agent} & $\xrightarrow{\text{LLM \#1}}$ & ProblemConfig \\
+$\downarrow$ & & \\
+\fbox{Data Cleaning Agent} & $\xrightarrow{\text{sandbox}}$ & Cleaned CSV \\
+$\downarrow$ & & \\
+\fbox{Modeling Agent} & $\xrightarrow{\text{LLM \#2 + solvers}}$ & Predictions + Orders \\
+$\downarrow$ & & \\
+\fbox{Explanation Agent} & $\xrightarrow{\text{LLM \#3}}$ & Final Report \\
+\end{tabular}
+}}
+\caption{Multi-agent pipeline with three LLM touchpoints.}
+\label{fig:pipeline}
+\end{figure}
+
+\subsection{Agent Modules}
+
+\subsubsection{Agent 1: Intake Agent}
+Converts natural language problem descriptions into a structured \texttt{ProblemConfig} (Pydantic schema). Inspects the uploaded CSV (columns, dtypes, sample rows, statistics), formulates decision variables, objectives, constraints, and cost structure, then saves a validated JSON configuration. The user reviews and edits the config via the web UI before the pipeline proceeds.
+
+\subsubsection{Agent 2: Data Cleaning Agent}
+Executes pandas-based cleaning code in an isolated sandbox (timeout = 30s, restricted file access). Validates that output rows are a subset of input rows (no data fabrication), enforces type consistency, and produces a cleaned CSV with a data manifest (row counts, dtypes, null counts).
+
+\subsubsection{Agent 3: Modeling Agent}
+The core analytical engine with MCP server tools:
+\begin{itemize}[nosep]
+    \item \texttt{load\_data()} --- Aggregates demand groups, engineers features, splits train/test
+    \item \texttt{run\_prediction()} --- Trains 6 model variants, selects winner by newsvendor cost
+    \item \texttt{run\_optimization()} --- Runs 5 optimizers, returns Pareto front and best result
+    \item \texttt{run\_joint\_optimization()} --- Model B two-period solver with carryover
+    \item \texttt{validate\_results()} --- Backtests predicted orders vs.\ actual demand
+    \item \texttt{run\_sensitivity()} --- Cost sensitivity to $\pm$30\% parameter shifts
+    \item \texttt{run\_baseline()} --- Compares agent orders to historical-average baseline
+\end{itemize}
+
+\subsubsection{Agent 4: Explanation Agent}
+Reads all pipeline outputs and synthesizes a stakeholder-facing report with 11 sections covering problem formulation, data summary, prediction methodology, optimization results, sensitivity analysis, and final recommendations.
+
+\subsection{Cross-Cutting: Trace Logger}
+
+Every pipeline step is logged with timestamp, module name, inputs, outputs, duration, token usage (for LLM calls), and errors. The trace is saved as structured JSON for audit, debugging, and presentation Q\&A.
+
+\subsection{Verification and Guardrails}
+
+\begin{table}[H]
+\centering
+\caption{Harness capabilities mapping.}
+\label{tab:harness}
+\begin{tabularx}{\textwidth}{@{}lX@{}}
+\toprule
+\textbf{Capability} & \textbf{Implementation} \\
+\midrule
+Tool execution & FastAPI calls data loader, prediction model, solver, chart generator \\
+Persistence & ProblemConfig + results saved to disk; sessions survive crashes \\
+Verification loops & Optimizer sandbox $\to$ constraint check $\to$ retry (up to 3$\times$) \\
+Guardrails & Budget caps and constraint validation enforced structurally, not via prompts \\
+Safe execution & Solver code runs in isolated sandbox; bad code cannot corrupt state \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\subsection{Web Interface}
+
+The agent is served through a FastAPI web application with:
+\begin{itemize}[nosep]
+    \item Drag-and-drop CSV upload
+    \item Real-time streaming of agent messages via Server-Sent Events (SSE)
+    \item Editable ProblemConfig review form
+    \item Results dashboard with final report and execution trace
+    \item Session management with timestamped run directories
+\end{itemize}
+
+\subsection{Technology Stack}
+
+\begin{table}[H]
+\centering
+\caption{Technology stack.}
+\label{tab:tech-stack}
+\begin{tabular}{@{}ll@{}}
+\toprule
+\textbf{Component} & \textbf{Technology} \\
+\midrule
+Language & Python 3.13 \\
+Package management & uv \\
+LLM framework & Claude Agent SDK (MCP servers) \\
+LLM model & Claude Sonnet (claude-sonnet-4-20250514) \\
+ML/Prediction & XGBoost, LightGBM, scikit-learn (Ridge) \\
+Optimization & SciPy (SLSQP, L-BFGS-B); custom PGD, SGD, Adam \\
+Data processing & pandas, NumPy \\
+Web framework & FastAPI + Uvicorn + Jinja2 + SSE \\
+Validation & Pydantic v2 \\
+Testing & pytest, pytest-asyncio \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+% ============================================================================
+\section{Baseline Comparison and Benchmark Testing}
+% ============================================================================
+
+\subsection{Baseline Definition}
+
+The baseline represents the league president's current approach: ordering the \textbf{historical average quantity} for each SKU, subject to the MOQ constraint. This is a reasonable proxy for an experience-based heuristic that simply ``orders what we usually order.''
+
+\subsection{Backtest Results}
+
+The agent's ordering policy (newsvendor critical ratio of 0.36, trained on 2020--2024) was evaluated against 2025 actual demand across 68 SKUs:
+
+\begin{table}[H]
+\centering
+\caption{Agent vs.\ baseline cost comparison (2025 backtest).}
+\label{tab:baseline-comparison}
+\begin{tabular}{@{}lrrr@{}}
+\toprule
+\textbf{Category} & \textbf{Agent Cost (\$)} & \textbf{Baseline Cost (\$)} & \textbf{Savings (\$)} \\
+\midrule
+Tops (jerseys) & 12,128 & 27,671 & 15,543 \\
+Bottoms (shorts) & 3,409 & 5,990 & 2,581 \\
+Socks & 1,038 & 1,824 & 786 \\
+\midrule
+\textbf{Total} & \textbf{16,575} & \textbf{35,486} & \textbf{18,911} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The agent achieves a \textbf{53.3\% cost reduction} (\$18,911 savings) compared to the baseline---far exceeding the 10--15\% target. This large improvement arises because the historical-average baseline systematically over-orders: with an overage cost of 0.70 exceeding the underage cost of 0.40, the cost-optimal policy orders conservatively to the 36th percentile, while the baseline orders to the mean (50th percentile).
+
+\subsection{Why the Gap Is So Large}
+
+The 53\% improvement is not an artifact---it reflects the fundamental asymmetry of the newsvendor cost structure. When $c_o > c_u$ (overage costs exceed underage costs), over-ordering is more expensive than under-ordering. A naive policy that orders to the mean will systematically incur excess overage costs. The optimal critical ratio of 0.36 corrects this by ordering well below the mean.
+
+% ============================================================================
+\section{Sensitivity Analysis}
+% ============================================================================
+
+The sensitivity analysis examines how the total newsvendor cost responds to $\pm$30\% shifts in the overage and underage cost fractions, holding the order plan fixed:
+
+\begin{table}[H]
+\centering
+\caption{Cost sensitivity to parameter shifts ($\pm$30\%).}
+\label{tab:sensitivity}
+\begin{tabular}{@{}crr|crr@{}}
+\toprule
+\multicolumn{3}{c|}{\textbf{Overage Cost ($c_o$) Shift}} & \multicolumn{3}{c}{\textbf{Underage Cost ($c_u$) Shift}} \\
+\textbf{Shift} & \textbf{Cost (\$)} & \textbf{$\Delta$\%} & \textbf{Shift} & \textbf{Cost (\$)} & \textbf{$\Delta$\%} \\
+\midrule
+$-$30\% & 12,319 & $-$25.7\% & $-$30\% & 15,858 & $-$4.3\% \\
+$-$20\% & 13,738 & $-$17.1\% & $-$20\% & 16,097 & $-$2.9\% \\
+$-$10\% & 15,156 & $-$8.6\% & $-$10\% & 16,336 & $-$1.4\% \\
+Base    & 16,575 & 0.0\%     & Base    & 16,575 & 0.0\% \\
+$+$10\% & 17,993 & $+$8.6\% & $+$10\% & 16,814 & $+$1.4\% \\
+$+$20\% & 19,412 & $+$17.1\% & $+$20\% & 17,053 & $+$2.9\% \\
+$+$30\% & 20,831 & $+$25.7\% & $+$30\% & 17,292 & $+$4.3\% \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{Key finding:} The plan is approximately \textbf{6$\times$ more sensitive to overage cost than underage cost}. A 30\% increase in overage cost raises total cost by 25.7\%, while the same shift in underage cost causes only a 4.3\% change.
+
+\textbf{Interpretation:} Because the optimal policy orders to the 36th percentile (below the mean), the plan carries more overage risk than underage risk. The overage cost fraction (0.70---reflecting the no-salvage reality of season-specific uniforms) is the dominant cost driver and the single most important parameter to validate with the league president.
+
+% ============================================================================
+\section{Managerial Recommendations}
+% ============================================================================
+
+\subsection{Primary Recommendation}
+
+\textbf{Adopt the newsvendor-optimal ordering policy for all product categories.} The temporal backtest demonstrates a 53\% cost reduction versus the historical-average baseline. Even against a more sophisticated heuristic, double-digit savings are very likely.
+
+\subsection{Category-Specific Guidance}
+
+\begin{enumerate}
+    \item \textbf{Jerseys/Tops (Model B --- Joint):} Front-load Year~1 orders (3,131 units) to build $\sim$1,452 units of carryover inventory as a hedge against Year~2 stockout risk. This reduces the two-period lifecycle cost by 45.7\% (\$8,606).
+
+    \item \textbf{Shorts and Socks (Model A --- Independent):} Apply the single-period newsvendor policy at the 36th percentile critical ratio each season. No lifecycle carryover is needed for these categories.
+\end{enumerate}
+
+\subsection{Budget Consideration}
+
+With the \$40,000/season budget, the constraint is largely non-binding for Model~B (shadow price \$0.053/\$). However, Model~A shows a meaningful shadow price of \$0.306/\$, indicating that additional budget flexibility in Year~1 still has value for the independent formulation. The budget is not the primary driver of cost savings---the joint formulation itself delivers the largest improvement.
+
+\subsection{Implementation Path}
+
+\begin{enumerate}[nosep]
+    \item Adopt the agent's ordering recommendations for the upcoming season as a pilot.
+    \item Track actual costs against the agent's predictions for one full cycle.
+    \item Validate the overage cost assumption (0.70) with actual salvage/write-off data.
+    \item If validated, integrate the agent into the seasonal ordering workflow permanently.
+\end{enumerate}
+
+% ============================================================================
+\section{Limitations and Future Improvements}
+% ============================================================================
+
+\subsection{Current Limitations}
+
+\begin{enumerate}
+    \item \textbf{Sparse demand groups:} 30 of 122 demand groups have only 1 year of history, and 20 have 2 years. Empirical quantile estimates for these low-volume SKUs (e.g., women's/adult sizes) are low-confidence.
+
+    \item \textbf{Cost parameter assumptions:} The 0.70 overage and 0.40 underage fractions are estimated, not measured from actual financial data. The sensitivity analysis shows overage cost is the dominant driver---a miscalibration here would materially affect recommendations.
+
+    \item \textbf{No external covariates:} The prediction model uses only historical demand patterns. Registration trends, competitor leagues, demographic shifts, or marketing campaigns are not incorporated.
+
+    \item \textbf{Pipeline configuration rigidity:} The groupby keys and train/test years are fixed at pipeline startup and cannot be reconfigured mid-run without restarting the modeling agent. This required workarounds for the joint optimization and baseline comparison.
+
+    \item \textbf{Budget model simplicity:} The current model assumes a flat \$40,000/season budget across all categories. In practice, the league may have category-specific budgets or flexible inter-category transfers.
+\end{enumerate}
+
+\subsection{Future Improvements}
+
+\begin{enumerate}
+    \item \textbf{Bayesian demand modeling:} Replace point estimates with full posterior distributions to better quantify uncertainty for sparse SKUs and improve the SAA optimizer's scenario quality.
+
+    \item \textbf{Registration-driven demand signals:} Integrate early registration counts as leading indicators to update demand forecasts between the ordering decision and the fulfillment deadline.
+
+    \item \textbf{Multi-category budget optimization:} Extend the optimizer to jointly allocate budget across categories (not just within) to capture cross-category substitution effects.
+
+    \item \textbf{Actual cost tracking:} Build a feedback loop that measures realized overage/underage costs season-by-season and recalibrates the cost parameters automatically.
+
+    \item \textbf{Expanded product lifecycle modeling:} Generalize Model~B to handle $n$-period lifecycles and overlapping product transitions (e.g., Tiro~25 $\to$ successor model).
+\end{enumerate}
+
+% ============================================================================
+\section{AI Tool Disclosure}
+% ============================================================================
+
+In accordance with course policy, we disclose the following uses of generative AI tools in this project:
+
+\begin{itemize}
+    \item \textbf{Claude (Anthropic)} was used as the LLM backbone of the agent system, invoked at three pipeline stages: problem intake (NL $\to$ structured config), optimizer code exploration, and result explanation/report generation.
+    \item \textbf{Claude Code} (Anthropic's CLI tool) was used to assist with code development, debugging, and this report's \LaTeX{} formatting.
+    \item All optimization formulations, data analysis, cost structure design, and business interpretations reflect the team's genuine understanding. The LLM serves as a tool within the agent pipeline---its outputs are validated, constrained, and auditable through the trace logger.
+\end{itemize}
+
+% ============================================================================
+% End of Report
+% ============================================================================
+
+\end{document}

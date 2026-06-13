@@ -39,7 +39,7 @@ def build_cfa_default_config() -> ProblemConfig:
             name="seasonal_budget",
             description="Total procurement spend per season cannot exceed league budget",
             type="hard",
-            parameters={"budget_usd": 8000, "note": "Estimated — update with real budget"},
+            parameters={"budget_usd": 40000, "note": "Estimated — update with real budget"},
         ),
         Constraint(
             name="minimum_order_quantity",

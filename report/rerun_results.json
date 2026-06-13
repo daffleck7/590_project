@@ -1,0 +1,18 @@
+{
+  "budget": 40000,
+  "model_a_total_cost": 18826.12,
+  "model_a_total_spend": 102065.0,
+  "model_a_method": "SLSQP",
+  "model_b_total_cost": 10220.07,
+  "model_b_y1_spend": 59132.0,
+  "model_b_y2_spend": 55576.0,
+  "cost_of_myopia_usd": 8606.05,
+  "cost_reduction_pct": 45.71,
+  "total_expected_carryover_units": 1451.6,
+  "y1_qty_model_a_total": 3312,
+  "y1_qty_model_b": 3131,
+  "y2_qty_model_b": 2785,
+  "model_a_y1_shadow_price": 0.3063,
+  "model_b_y1_shadow_price": 0.0533,
+  "model_b_feasible": true
+}

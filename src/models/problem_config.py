@@ -49,7 +49,7 @@ class Constraint(BaseModel):
     type: str = Field("hard", description="hard or soft")
     parameters: dict = Field(
         default_factory=dict,
-        description="Numeric values. e.g. {'budget': 8000, 'currency': 'USD'}"
+        description="Numeric values. e.g. {'budget': 40000, 'currency': 'USD'}"
     )
 
 
@@ -190,6 +190,18 @@ def get_cost(config: ProblemConfig, category: str, cost_name: str,
     for item in config.cost_structure:
         if item.name == cost_name:
             return item.value
+
+    # Try common aliases before giving up — intake may use different names
+    _COST_ALIASES: dict[str, list[str]] = {
+        "unit_cost": ["purchase_cost", "cost_per_unit", "base_cost"],
+        "purchase_cost": ["unit_cost", "cost_per_unit", "base_cost"],
+        "overage_cost": ["overstock_cost", "excess_cost", "surplus_cost"],
+        "underage_cost": ["stockout_cost", "shortage_cost", "backorder_cost"],
+    }
+    for alias in _COST_ALIASES.get(cost_name, []):
+        for item in config.cost_structure:
+            if item.name == alias:
+                return item.value
 
     raise KeyError(f"Cost '{cost_name}' not found for category='{category}', period={period}")
 

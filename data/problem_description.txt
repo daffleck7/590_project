@@ -20,22 +20,32 @@ The current jersey model (Tiro 25) is in Year 2 of its lifecycle — the final y
 
 PROBLEM CLASS
 This is a multi-period, multi-product newsvendor ordering problem. The goal is to minimize total expected cost — combining procurement, holding/salvage (overage), and rush-order/stockout (underage) costs — subject to:
-- A seasonal budget constraint (approximately $8,000 per season)
+- A seasonal budget constraint (approximately $40,000 per season)
 - Supplier minimum order quantity of 6 units per size
 - Non-negativity constraints
 
 COST STRUCTURE
-Approximate costs by product category:
-- Tops (jerseys): $25 wholesale, $5/$15 overage (Y1/Y2), $12/$60 underage (Y1/Y2)
-- Bottoms (shorts): $16 wholesale, $3/$8 overage (Y1/Y2), $8/$25 underage (Y1/Y2)
-- Socks: $10 wholesale, $1 overage, $5 underage
+All costs are expressed as a fraction of the selling price (unit_price).
 
-The critical ratio (cu / (cu + co)) is approximately 0.30 across categories, meaning the optimal policy orders conservatively — at about the 30th percentile of demand.
+- Purchase cost: 70% of selling price (wholesale cost to acquire one unit).
+- Overage cost: 70% of selling price per unsold unit. Season-specific uniforms cannot be salvaged, so the full purchase cost is lost.
+- Underage cost: 40% of selling price per unit short. This covers expedited shipping (inbound and outbound) plus a temporary jersey provided to the player while the rush order is fulfilled.
+
+For the two-period joint formulation (see STAKEHOLDER MODIFICATION below):
+- Year 1 underage: 40% of selling price (expedited shipping + temp jersey).
+- Year 1 overage under joint model: 0% — unsold Year 1 stock carries to Year 2 at zero holding cost rather than being written off.
+- Year 2 underage: 80% of selling price — the model is discontinued, so sourcing from the secondary market roughly doubles the shortage cost.
+- Year 2 overage: 70% of selling price — full purchase cost lost on unsold discontinued stock.
+
+The critical ratio for the single-period model is cu / (cu + co) = 0.40 / (0.40 + 0.70) ≈ 0.36, meaning the optimal policy orders to roughly the 36th percentile of demand.
+
+STAKEHOLDER MODIFICATION — TWO-PERIOD JOINT OPTIMIZATION
+Year 1 unsold inventory carries over into Year 2 at zero holding cost. Because the uniform model is discontinued after Year 2, Year 2 stockouts are especially costly (80% of selling price vs. 40% in Year 1). The optimizer should jointly decide Year 1 and Year 2 order quantities, recognizing that Year 1 surplus acts as a free hedge against Year 2 stockout risk. Compare the joint (Model B) solution against the independent single-period (Model A) solution to quantify the cost of myopia.
 
 DATA AVAILABLE
 Historical order data from 2020–2026, cleaned to 12,209 line items with columns: order_date, season, year, product_category, gender_age, size, quantity, unit_price.
 
 EVALUATION APPROACH
-Backtest mode: train demand models on 2020–2023 data, predict fall 2024 demand, and compare the optimizer's recommended quantities and cost against what was actually ordered. The primary metric is total season newsvendor cost, not prediction accuracy (RMSE).
+Backtest mode: train demand models on 2020–2024 data, validate on 2025, and project the recommended order for 2026. The primary metric is total season newsvendor cost, not prediction accuracy (RMSE).
 
 A 10–15% cost reduction vs. the baseline (historical average ordering) would be practically meaningful, representing hundreds of dollars per season.

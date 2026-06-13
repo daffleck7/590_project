@@ -17,6 +17,7 @@ dependencies = [
     "jinja2>=3.1",
     "python-multipart>=0.0.9",
     "sse-starlette>=2.0",
+    "pillow>=12.2.0",
 ]
 
 [project.optional-dependencies]
@@ -34,3 +35,8 @@ packages = ["src"]
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[dependency-groups]
+dev = [
+    "python-docx>=1.2.0",
+]
